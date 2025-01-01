@@ -168,17 +168,17 @@ end
 -- == X-Plane Functions ==
 function openToLoadHubWindow()
 	toloadhub_window = float_wnd_create(toLoadHub.settings.general.window_width, toLoadHub.settings.general.window_height, 1, true)
-    float_wnd_set_position(tobus_window, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
-	float_wnd_set_title(tobus_window, string.format("[%s] - v%s", toLoadHub.title, toLoadHub.version))
-	float_wnd_set_imgui_builder(tobus_window, "viewToLoadHubWindow")
-    float_wnd_set_onclose(tobus_window, "closeToLoadHubWindow")
+    float_wnd_set_position(toloadhub_window, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
+	float_wnd_set_title(toloadhub_window, string.format("%s - v%s", toLoadHub.title, toLoadHub.version))
+	float_wnd_set_imgui_builder(toloadhub_window, "viewToLoadHubWindow")
+    float_wnd_set_onclose(toloadhub_window, "closeToLoadHubWindow")
     toLoadHub.visible_main = true
 end
 
 function openToLoadHubSettingsWindow()
 	toloadhub_window_settings = float_wnd_create(400, 400, 1, true)
     float_wnd_set_position(toloadhub_window_settings, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
-	float_wnd_set_title(toloadhub_window_settings, string.format("[%s] Settings", toLoadHub.title))
+	float_wnd_set_title(toloadhub_window_settings, string.format("%s Settings", toLoadHub.title))
 	float_wnd_set_imgui_builder(toloadhub_window_settings, "viewToLoadHubWindowSettings")
     float_wnd_set_onclose(toloadhub_window_settings, "closeToLoadHubSettingsWindow")
     toLoadHub.visible_main = true
@@ -214,6 +214,14 @@ function viewToLoadHubWindow()
 
         end
     end
+    -- AirbusFBW/AftCargo
+    -- AirbusFBW/FwdCargo
+    -- ZWF = toliss_airbus/iscsinterface/blockZfw
+    -- ZWF Applied = toliss_airbus/iscsinterface/zfw
+    -- GWCG = toliss_airbus/iscsinterface/currentCG
+    -- ZWFCG = toliss_airbus/iscsinterface/blockZfwCG
+    -- ZWFCG Applied = toliss_airbus/iscsinterface/zfwCG
+    -- FUEL Block TO apply = toliss_airbus/iscsinterface/setNewBlockFuel
 
 end
 
@@ -315,7 +323,7 @@ then
     if toLoadHub.settings.general.auto_init then
         resetAirplaneParameters()
     end
-    add_macro("TOBUS - Your Toliss Boarding Companion", "toggleToloadHubWindow(true)")
+    add_macro("ToLoad Hub", "toggleToloadHubWindow(true)")
     create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow(false)", "", "")
 
     if toLoadHub.settings.general.auto_open then
