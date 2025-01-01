@@ -9,6 +9,11 @@
 
     License: MIT License
 --]]
+local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A346 = true, A339 = true }
+if not valid_plane_icao[PLANE_ICAO] then
+    XPLMSpeakString("Invalid Airplane for the ToLoad Hub Plugin")
+    return
+end
 
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
@@ -333,26 +338,22 @@ function toggleToloadHubWindow()
 end
 
 -- == Main code ==
-if PLANE_ICAO == "A319" or PLANE_ICAO == "A20N" or PLANE_ICAO == "A321" or
-   PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339"
-then
-    debug(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
-    dataref("toLoadHub_NoPax", "AirbusFBW/NoPax", "writeable")
-    dataref("toLoadHub_PaxDistrib", "AirbusFBW/PaxDistrib", "writeable")
-    setAirplanePassengerNumber()
-    readSettingsToFile()
-    if toLoadHub.settings.simbrief.auto_fetch then
-        fetchSimbriefFPlan()
-    end
-    if toLoadHub.settings.general.auto_init then
-        resetAirplaneParameters()
-    end
-    add_macro("ToLoad Hub", "loadToloadHubWindow()")
-    create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
-
-    if toLoadHub.settings.general.auto_open then
-       loadToloadHubWindow()
-    end
-    do_on_exit("saveSettingsToFile(true)")
-    debug(string.format("[%s] Plugin fully loaded.", toLoadHub.title))
+debug(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
+dataref("toLoadHub_NoPax", "AirbusFBW/NoPax", "writeable")
+dataref("toLoadHub_PaxDistrib", "AirbusFBW/PaxDistrib", "writeable")
+setAirplanePassengerNumber()
+readSettingsToFile()
+if toLoadHub.settings.simbrief.auto_fetch then
+    fetchSimbriefFPlan()
 end
+if toLoadHub.settings.general.auto_init then
+    resetAirplaneParameters()
+end
+add_macro("ToLoad Hub", "loadToloadHubWindow()")
+create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
+
+if toLoadHub.settings.general.auto_open then
+    loadToloadHubWindow()
+end
+do_on_exit("saveSettingsToFile(true)")
+debug(string.format("[%s] Plugin fully loaded.", toLoadHub.title))
