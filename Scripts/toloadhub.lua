@@ -22,9 +22,22 @@ local toLoadHub = {
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
-    pax_count = 0, -- old intended_passenger
+    pax_count = 0, -- old intendedPassengerNumber
+    pax_onboard = 0, -- old passengerBoarded
     max_passenger = 224,
+    pax_distribution_range = {35, 60},
     first_init = false,
+    phases = {
+        is_onboarded = false,
+        is_onboarding = false,
+        is_onboarding_pause = false,
+        is_deboarding = false,
+        is_deboarding_pause = false,
+        is_deboarded = false,
+    },
+    boarding_speed = 0,
+    boarding_secnds_per_pax = 0,
+    next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     settings = {
         general = {
             debug = false,
@@ -51,6 +64,7 @@ local toLoadHub = {
         }
     }
 }
+
 
 local toloadhub_window = nil
 
@@ -80,8 +94,8 @@ local function toBoolean(value)
 end
 
 -- == Utility Functions ==
-function saveSettingsToFile(final)
-    debug(string.format("[%s] saveSettingsToFile(%s)", toLoadHub.title, tostring(final)))
+function saveSettingsToFileToLoadHub(final)
+    debug(string.format("[%s] saveSettingsToFileToLoadHub(%s)", toLoadHub.title, tostring(final)))
     if final or not final then
         local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
         local scrLeft, scrTop, scrRight, scrBottom = XPLMGetScreenBoundsGlobal()
@@ -170,10 +184,37 @@ end
 local function resetAirplaneParameters()
     toLoadHub_NoPax = 0
     toLoadHub_PaxDistrib = 0.5
+
     toLoadHub.pax_count = 0
+    toLoadHub.pax_onboard = 0
     toLoadHub.first_init = true
+    toLoadHub.boarding_speed = 0
+    toLoadHub.boarding_secnds_per_pax =0
+    toLoadHub.next_boarding_check = os.time()
+    for key in pairs(toLoadHub.phases) do
+        toLoadHub.phases[key] = false
+    end
     command_once("AirbusFBW/SetWeightAndCG")
     debug(string.format("[%s] Reset parameters done", toLoadHub.title))
+end
+
+local function setRandomNumberOfPassengers()
+    local passengerDistributionGroup = math.random(0, 100)
+    local ranges = {
+        {2, 0.22, 0.54},
+        {16, 0.54, 0.72},
+        {58, 0.72, 0.87},
+        {100, 0.87, 1.0} -- 1.0 = 100%
+    }
+    for _, range in ipairs(ranges) do
+        if passengerDistributionGroup < range[1] then
+            toLoadHub.pax_count = math.random(
+                math.floor(toLoadHub.max_passenger * range[2]),
+                math.floor(toLoadHub.max_passenger * range[3])
+            )
+            return
+        end
+    end
 end
 
 -- == X-Plane Functions ==
@@ -186,6 +227,68 @@ function openToLoadHubWindow(isNew)
     float_wnd_set_imgui_builder(toloadhub_window, "viewToLoadHubWindow")
     float_wnd_set_onclose(toloadhub_window, "closeToLoadHubWindow")
     toLoadHub.visible_main = true
+
+    if not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
+        local passengeraNumberChanged, newPassengerNumber = imgui.SliderInt("Passengers number", toLoadHub.pax_count, 0, toLoadHub.max_passenger, "Value: %d")
+        if passengeraNumberChanged then
+            toLoadHub.pax_count = newPassengerNumber
+        end
+        if imgui.Button("Get from simbrief") then
+            fetchSimbriefFPlan()
+        end
+        imgui.SameLine(155)
+        if imgui.Button("Set random passenger number") then
+            setRandomNumberOfPassengers()
+        end
+
+        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 0) then
+            if imgui.Button("Start Boarding") then
+                toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
+                toLoadHub.next_boarding_check = os.time()
+                toLoadHub.phases.is_onboarding = true
+            end
+        else
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+            imgui.TextUnformatted("Open the doors to start the onboarding.")
+            imgui.PopStyleColor()
+        end
+    end
+
+    -- loading Time Selector
+    if not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_deboarded and not toLoadHub.phases.is_deboarding then
+        local generalSpeed = 3
+        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) and (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 0) then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF43B54B)
+            imgui.TextUnformatted("Both doors are open and in use.")
+            imgui.PopStyleColor()
+            generalSpeed = 2
+        end
+        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 0) then
+            local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
+            local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
+            local labelFast = fastModeMinutes < 1
+                and "Fast (less than a minute)"
+                or string.format("Fast (%d minute%s)", fastModeMinutes, fastModeMinutes > 1 and "s" or "")
+            local labelReal = realModeMinutes < 1
+                and "Real (less than a minute)"
+                or string.format("Real (%d minute%s)", realModeMinutes, realModeMinutes > 1 and "s" or "")
+
+            if imgui.RadioButton("Instant", toLoadHub.boarding_speed == 0) then
+                toLoadHub.boarding_speed = 0
+                toLoadHub.boarding_secnds_per_pax = 0
+            end
+
+            if imgui.RadioButton(labelFast, toLoadHub.boarding_speed == 1) then
+                toLoadHub.boarding_speed = 1
+                toLoadHub.boarding_secnds_per_pax = generalSpeed
+            end
+
+            if imgui.RadioButton(labelReal, toLoadHub.boarding_speed == 2) then
+                toLoadHub.boarding_speed = 2
+                toLoadHub.boarding_secnds_per_pax = generalSpeed * 2
+            end
+        end
+    end
 end
 
 function openToLoadHubSettingsWindow()
@@ -196,11 +299,10 @@ function openToLoadHubSettingsWindow()
 end
 
 function closeToLoadHubWindow()
-    saveSettingsToFile(true)
+    saveSettingsToFileToLoadHub(true)
     toLoadHub.visible_main = false
     toLoadHub.visible_settings = false
 end
-
 
 function viewToLoadHubWindow()
     local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
@@ -254,7 +356,7 @@ function viewToLoadHubWindowSettings()
     imgui.Spacing()
 
     -- General Settings
-    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8) -- Colore arancione
+    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
     imgui.TextUnformatted("General Settings:")
     imgui.PopStyleColor()
 
@@ -318,7 +420,7 @@ function viewToLoadHubWindowSettings()
     if changed then toLoadHub.settings.door.close_deboarding , setSave = newval, true end
 
     if setSave then
-        saveSettingsToFile(false)
+        saveSettingsToFileToLoadHub(false)
         setSave = false
     end
 end
@@ -341,6 +443,9 @@ end
 debug(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
 dataref("toLoadHub_NoPax", "AirbusFBW/NoPax", "writeable")
 dataref("toLoadHub_PaxDistrib", "AirbusFBW/PaxDistrib", "writeable")
+dataref("toLoadHub_Doors_1", "AirbusFBW/PaxDoorModeArray", "writeable", 0)
+dataref("toLoadHub_Doors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 2)
+
 setAirplanePassengerNumber()
 readSettingsToFile()
 if toLoadHub.settings.simbrief.auto_fetch then
@@ -355,5 +460,5 @@ create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window"
 if toLoadHub.settings.general.auto_open then
     loadToloadHubWindow()
 end
-do_on_exit("saveSettingsToFile(true)")
+do_on_exit("saveSettingsToFileToLoadHub(true)")
 debug(string.format("[%s] Plugin fully loaded.", toLoadHub.title))
