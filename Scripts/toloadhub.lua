@@ -42,7 +42,7 @@ local toLoadHub = {
         general = {
             debug = false,
             window_width = 400,
-            window_height = 400,
+            window_height = 200,
             window_x = 160,
             window_y = 200,
             auto_open = true,
@@ -187,13 +187,16 @@ local function resetAirplaneParameters()
 
     toLoadHub.pax_count = 0
     toLoadHub.pax_onboard = 0
-    toLoadHub.first_init = true
     toLoadHub.boarding_speed = 0
     toLoadHub.boarding_secnds_per_pax =0
     toLoadHub.next_boarding_check = os.time()
     for key in pairs(toLoadHub.phases) do
         toLoadHub.phases[key] = false
     end
+    if not toLoadHub.first_init and toLoadHub.settings.simbrief.auto_fetch then
+        fetchSimbriefFPlan()
+    end
+    toLoadHub.first_init = true
     command_once("AirbusFBW/SetWeightAndCG")
     debug(string.format("[%s] Reset parameters done", toLoadHub.title))
 end
