@@ -41,7 +41,7 @@ local toLoadHub = {
     settings = {
         general = {
             debug = false,
-            window_width = 375,
+            window_width = 400,
             window_height = 400,
             window_x = 160,
             window_y = 200,
@@ -69,11 +69,12 @@ local toLoadHub = {
 local toloadhub_window = nil
 
 local urls = {
-    simbrief_fplan = "http://www.simbrief.com/api/xml.fetcher.php?username=" .. toLoadHub.settings.simbrief.username,
+    simbrief_fplan = "http://www.simbrief.com/api/xml.fetcher.php?username=",
 }
 local LIP = require("LIP")
 local http = require("socket.http")
-local xml = require('LuaXml')
+require("LuaXml")
+
 math.randomseed(os.time())
 
 -- == Helper Functions ==
@@ -134,8 +135,8 @@ local function fetchSimbriefFPlan()
         debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
         return false
     end
+    local response_xml, statusCode = http.request(urls.simbrief_fplan .. toLoadHub.settings.simbrief.username)
 
-    local response_xml, statusCode = http.request(urls.simbrief_fplan)
     if statusCode ~= 200 then
         debug(string.format("[%s] SimBrief API returned an error: [%d]", toLoadHub.title, statusCode))
         return false
@@ -146,14 +147,13 @@ local function fetchSimbriefFPlan()
         debug(string.format("[%s] XML from SimBrief not valid.", toLoadHub.title))
         return false
     end
-
-    local status = xml_data.OFP.fetch.status[1]
-    if not status or status  ~= "Success" then
+    local status = xml_data:find("status")
+    if not status or status[1]  ~= "Success" then
         debug(string.format("[%s] Simbrief Status not Success.", toLoadHub.title))
         return false
     end
-
-    toLoadHub.pax_count = tonumber(xml_data.OFP.weights.pax_count[1])
+    local pax_count = xml_data:find("pax_count")
+    toLoadHub.pax_count = tonumber(pax_count[1])
     if toLoadHub.settings.simbrief.randomize_passenger then
         local r = 0.01 * math.random(92, 103)
         toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
@@ -227,68 +227,6 @@ function openToLoadHubWindow(isNew)
     float_wnd_set_imgui_builder(toloadhub_window, "viewToLoadHubWindow")
     float_wnd_set_onclose(toloadhub_window, "closeToLoadHubWindow")
     toLoadHub.visible_main = true
-
-    if not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
-        local passengeraNumberChanged, newPassengerNumber = imgui.SliderInt("Passengers number", toLoadHub.pax_count, 0, toLoadHub.max_passenger, "Value: %d")
-        if passengeraNumberChanged then
-            toLoadHub.pax_count = newPassengerNumber
-        end
-        if imgui.Button("Get from simbrief") then
-            fetchSimbriefFPlan()
-        end
-        imgui.SameLine(155)
-        if imgui.Button("Set random passenger number") then
-            setRandomNumberOfPassengers()
-        end
-
-        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 0) then
-            if imgui.Button("Start Boarding") then
-                toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
-                toLoadHub.next_boarding_check = os.time()
-                toLoadHub.phases.is_onboarding = true
-            end
-        else
-            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-            imgui.TextUnformatted("Open the doors to start the onboarding.")
-            imgui.PopStyleColor()
-        end
-    end
-
-    -- loading Time Selector
-    if not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_deboarded and not toLoadHub.phases.is_deboarding then
-        local generalSpeed = 3
-        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) and (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 0) then
-            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF43B54B)
-            imgui.TextUnformatted("Both doors are open and in use.")
-            imgui.PopStyleColor()
-            generalSpeed = 2
-        end
-        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 0) then
-            local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
-            local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
-            local labelFast = fastModeMinutes < 1
-                and "Fast (less than a minute)"
-                or string.format("Fast (%d minute%s)", fastModeMinutes, fastModeMinutes > 1 and "s" or "")
-            local labelReal = realModeMinutes < 1
-                and "Real (less than a minute)"
-                or string.format("Real (%d minute%s)", realModeMinutes, realModeMinutes > 1 and "s" or "")
-
-            if imgui.RadioButton("Instant", toLoadHub.boarding_speed == 0) then
-                toLoadHub.boarding_speed = 0
-                toLoadHub.boarding_secnds_per_pax = 0
-            end
-
-            if imgui.RadioButton(labelFast, toLoadHub.boarding_speed == 1) then
-                toLoadHub.boarding_speed = 1
-                toLoadHub.boarding_secnds_per_pax = generalSpeed
-            end
-
-            if imgui.RadioButton(labelReal, toLoadHub.boarding_speed == 2) then
-                toLoadHub.boarding_speed = 2
-                toLoadHub.boarding_secnds_per_pax = generalSpeed * 2
-            end
-        end
-    end
 end
 
 function openToLoadHubSettingsWindow()
@@ -317,6 +255,78 @@ function viewToLoadHubWindow()
             resetAirplaneParameters()
         end
         return
+    end
+
+    -- Starting Onboarding and Passenger Selection
+    if not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
+        local passengeraNumberChanged, newPassengerNumber = imgui.SliderInt("Passengers number", toLoadHub.pax_count, 0, toLoadHub.max_passenger, "Value: %d")
+        if passengeraNumberChanged then
+            toLoadHub.pax_count = newPassengerNumber
+        end
+        if imgui.Button("Get from Simbrief") then
+            fetchSimbriefFPlan()
+        end
+        imgui.SameLine(155)
+        if imgui.Button("Set random passenger number") then
+            setRandomNumberOfPassengers()
+        end
+
+        if toLoadHub.pax_count > 0 then
+            if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) then
+                imgui.Separator()
+                imgui.Spacing()
+
+                if imgui.Button("Start Boarding") then
+                    toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
+                    toLoadHub.next_boarding_check = os.time()
+                    toLoadHub.phases.is_onboarding = true
+                end
+            else
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                imgui.TextUnformatted("Open the doors to start the onboarding.")
+                imgui.PopStyleColor()
+            end
+        else
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+            imgui.TextUnformatted("Please add at least one passenger.")
+            imgui.PopStyleColor()
+        end
+    end
+
+    -- loading Time Selector
+    if toLoadHub.pax_count >0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_deboarded and not toLoadHub.phases.is_deboarding then
+        local generalSpeed = 3
+        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) and (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF43B54B)
+            imgui.TextUnformatted("Both doors are open and in use.")
+            imgui.PopStyleColor()
+            generalSpeed = 2
+        end
+        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) then
+            local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
+            local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
+            local labelFast = fastModeMinutes < 1
+                and "Fast (less than a minute)"
+                or string.format("Fast (%d minute%s)", fastModeMinutes, fastModeMinutes > 1 and "s" or "")
+            local labelReal = realModeMinutes < 1
+                and "Real (less than a minute)"
+                or string.format("Real (%d minute%s)", realModeMinutes, realModeMinutes > 1 and "s" or "")
+
+            if imgui.RadioButton("Instant", toLoadHub.boarding_speed == 0) then
+                toLoadHub.boarding_speed = 0
+                toLoadHub.boarding_secnds_per_pax = 0
+            end
+
+            if imgui.RadioButton(labelFast, toLoadHub.boarding_speed == 1) then
+                toLoadHub.boarding_speed = 1
+                toLoadHub.boarding_secnds_per_pax = generalSpeed
+            end
+
+            if imgui.RadioButton(labelReal, toLoadHub.boarding_speed == 2) then
+                toLoadHub.boarding_speed = 2
+                toLoadHub.boarding_secnds_per_pax = generalSpeed * 2
+            end
+        end
     end
 
     if not toLoadHub.visible_settings then
@@ -448,11 +458,12 @@ dataref("toLoadHub_Doors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 2)
 
 setAirplanePassengerNumber()
 readSettingsToFile()
-if toLoadHub.settings.simbrief.auto_fetch then
-    fetchSimbriefFPlan()
-end
+
 if toLoadHub.settings.general.auto_init then
     resetAirplaneParameters()
+end
+if toLoadHub.settings.simbrief.auto_fetch then
+    fetchSimbriefFPlan()
 end
 add_macro("ToLoad Hub", "loadToloadHubWindow()")
 create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
