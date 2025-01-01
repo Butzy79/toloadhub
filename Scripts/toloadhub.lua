@@ -23,10 +23,10 @@ local toLoadHub = {
     settings = {
         general = {
             debug = false,
-            window_width = 800,
-            window_height = 250,
-            window_x = 200,
-            window_y = 100,
+            window_width = 375,
+            window_height = 400,
+            window_x = 160,
+            window_y = 200,
             auto_open = true,
             auto_init = true
         },
@@ -48,7 +48,6 @@ local toLoadHub = {
 }
 
 local toloadhub_window = nil
-local toloadhub_window_settings = nil
 
 local urls = {
     simbrief_fplan = "http://www.simbrief.com/api/xml.fetcher.php?username=" .. toLoadHub.settings.simbrief.username,
@@ -76,8 +75,15 @@ local function toBoolean(value)
 end
 
 -- == Utility Functions ==
-local function saveSettingsToFile()
-    debug(string.format("[%s] saveSettingsToFile()", toLoadHub.title))
+function saveSettingsToFile(final)
+    debug(string.format("[%s] saveSettingsToFile(%s)", toLoadHub.title, tostring(final)))
+    if final or not final then
+        local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
+        local scrLeft, scrTop, scrRight, scrBottom = XPLMGetScreenBoundsGlobal()
+        toLoadHub.settings.general.window_x = wLeft - scrLeft
+        toLoadHub.settings.general.window_y = wBottom - scrBottom
+    end
+
     LIP.save(SCRIPT_DIRECTORY .. toLoadHub.file, toLoadHub.settings)
     debug(string.format("[%s] file saved", toLoadHub.title))
 end
@@ -131,7 +137,7 @@ local function fetchSimbriefFPlan()
     toLoadHub.pax_count = tonumber(xml_data.OFP.weights.pax_count[1])
     if toLoadHub.settings.simbrief.randomize_passenger then
         local r = 0.01 * math.random(92, 103)
-	    toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
+        toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
     end
     debug(string.format("[%s] SimBrief XML downloaded and parsed.", toLoadHub.title))
@@ -166,38 +172,36 @@ local function resetAirplaneParameters()
 end
 
 -- == X-Plane Functions ==
-function openToLoadHubWindow()
-	toloadhub_window = float_wnd_create(toLoadHub.settings.general.window_width, toLoadHub.settings.general.window_height, 1, true)
-    float_wnd_set_position(toloadhub_window, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
-	float_wnd_set_title(toloadhub_window, string.format("%s - v%s", toLoadHub.title, toLoadHub.version))
-	float_wnd_set_imgui_builder(toloadhub_window, "viewToLoadHubWindow")
+function openToLoadHubWindow(isNew)
+    if isNew then
+        toloadhub_window = float_wnd_create(toLoadHub.settings.general.window_width, toLoadHub.settings.general.window_height, 1, true)
+        float_wnd_set_position(toloadhub_window, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
+    end
+    float_wnd_set_title(toloadhub_window, string.format("%s - v%s", toLoadHub.title, toLoadHub.version))
+    float_wnd_set_imgui_builder(toloadhub_window, "viewToLoadHubWindow")
     float_wnd_set_onclose(toloadhub_window, "closeToLoadHubWindow")
     toLoadHub.visible_main = true
 end
 
 function openToLoadHubSettingsWindow()
-	toloadhub_window_settings = float_wnd_create(400, 400, 1, true)
-    float_wnd_set_position(toloadhub_window_settings, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
-	float_wnd_set_title(toloadhub_window_settings, string.format("%s Settings", toLoadHub.title))
-	float_wnd_set_imgui_builder(toloadhub_window_settings, "viewToLoadHubWindowSettings")
-    float_wnd_set_onclose(toloadhub_window_settings, "closeToLoadHubSettingsWindow")
+    float_wnd_set_title(toloadhub_window, string.format("%s - Settings", toLoadHub.title))
+    float_wnd_set_imgui_builder(toloadhub_window, "viewToLoadHubWindowSettings")
+    float_wnd_set_onclose(toloadhub_window, "closeToLoadHubWindow")
     toLoadHub.visible_main = true
 end
 
 function closeToLoadHubWindow()
-    if toLoadHub.visible_settings then
-        float_wnd_destroy(toloadhub_window_settings)
-    end
+    saveSettingsToFile(true)
     toLoadHub.visible_main = false
-    toLoadHub.visible_settings = false
-end
-
-function closeToLoadHubSettingsWindow()
     toLoadHub.visible_settings = false
 end
 
 
 function viewToLoadHubWindow()
+    local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
+    toLoadHub.settings.general.window_height = wTop - wBottom
+    toLoadHub.settings.general.window_width = wRight - wLeft
+    
     if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
@@ -210,8 +214,12 @@ function viewToLoadHubWindow()
 
     if not toLoadHub.visible_settings then
         imgui.Separator()
+        imgui.Spacing()
+        imgui.SameLine((toLoadHub.settings.general.window_width)-125)
         if imgui.Button("Settings", 100, 30) then
-
+            toLoadHub.visible_settings = true
+            toLoadHub.visible_main = false
+            openToLoadHubSettingsWindow()
         end
     end
     -- AirbusFBW/AftCargo
@@ -226,20 +234,35 @@ function viewToLoadHubWindow()
 end
 
 function viewToLoadHubWindowSettings()
--- General Settings
-    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFA500FF) -- Colore arancione
+    local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
+    toLoadHub.settings.general.window_height = wTop - wBottom
+    toLoadHub.settings.general.window_width = wRight - wLeft
+
+    imgui.SameLine((toLoadHub.settings.general.window_width/2)-75)
+    if imgui.Button("Back to ToLoad HUB", 140, 30) then
+        toLoadHub.visible_settings = false
+        toLoadHub.visible_main = true
+        openToLoadHubWindow(false)
+    end
+    local setSave = false
+    imgui.Separator()
+    imgui.Spacing()
+
+    -- General Settings
+    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8) -- Colore arancione
     imgui.TextUnformatted("General Settings:")
     imgui.PopStyleColor()
 
     local changed, newval
     changed, newval = imgui.Checkbox("Auto Open ToLoad Hub Window", toLoadHub.settings.general.auto_open)
-    if changed then toLoadHub.settings.general.auto_open = newval end
+    if changed then toLoadHub.settings.general.auto_open , setSave = newval, true end
 
-    changed, newval = imgui.Checkbox("Automatically initialize airplane with zero", toLoadHub.settings.general.auto_init)
-    if changed then toLoadHub.settings.general.auto_init = newval end
+    changed, newval = imgui.Checkbox("Automatically initialize airplane", toLoadHub.settings.general.auto_init)
+    if changed then toLoadHub.settings.general.auto_init , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Debug Mode", toLoadHub.settings.general.debug)
-    if changed then toLoadHub.settings.general.debug = newval end
+    if changed then toLoadHub.settings.general.debug , setSave = newval, true end
+    imgui.Separator()
     imgui.Spacing()
 
     -- SimBrief Settings
@@ -248,62 +271,62 @@ function viewToLoadHubWindowSettings()
     imgui.PopStyleColor()
 
     changed, newval = imgui.Checkbox("Auto Fetch at beginning", toLoadHub.settings.simbrief.auto_fetch)
-    if changed then toLoadHub.settings.simbrief.auto_fetch = newval end
+    if changed then toLoadHub.settings.simbrief.auto_fetch , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Randomize Passenger", toLoadHub.settings.simbrief.randomize_passenger)
-    if changed then toLoadHub.settings.simbrief.randomize_passenger = newval end
-
-    imgui.Text("Username:")
-    changed, newval = imgui.InputText("##username", toLoadHub.settings.simbrief.username or "", 128)
-    if changed then toLoadHub.settings.simbrief.username = newval end
-
+    if changed then toLoadHub.settings.simbrief.randomize_passenger , setSave = newval, true end
+    
+    imgui.TextUnformatted("Username:")
+    imgui.SameLine(75)
+    changed, newval = imgui.InputText("##username", toLoadHub.settings.simbrief.username, 50)
+    if changed then toLoadHub.settings.simbrief.username , setSave = newval, true end
+    imgui.Separator()
     imgui.Spacing()
 
     -- Hoppie Settings
-    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6A5ACD)
+    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
     imgui.TextUnformatted("Hoppie Settings:")
     imgui.PopStyleColor()
 
     changed, newval = imgui.Checkbox("Enable Loadsheet", toLoadHub.settings.hoppie.enable_loadsheet)
-    if changed then toLoadHub.settings.hoppie.enable_loadsheet = newval end
+    if changed then toLoadHub.settings.hoppie.enable_loadsheet , setSave = newval, true end
 
-    imgui.Text("Secret:")
-    changed, newval = imgui.InputText("##secret", toLoadHub.settings.hoppie.secret or "", 128)
-    if changed then toLoadHub.settings.hoppie.secret = newval end
-
+    imgui.TextUnformatted("Secret:")
+    imgui.SameLine(75)
+    changed, newval = imgui.InputText("##secret", toLoadHub.settings.hoppie.secret, 80)
+    if changed then toLoadHub.settings.hoppie.secret , setSave = newval, true end
+    imgui.Separator()
     imgui.Spacing()
 
     -- Door Settings
-    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF32CD32)
+    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
     imgui.TextUnformatted("Door Settings:")
     imgui.PopStyleColor()
 
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.door.simulate_cargo)
-    if changed then toLoadHub.settings.door.simulate_cargo = newval end
+    if changed then toLoadHub.settings.door.simulate_cargo , setSave = newval, true end
 
-    changed, newval = imgui.Checkbox("Close Doors on Boarding", settings.door.close_boarding)
-    if changed then toLoadHub.settings.door.close_boarding = newval end
+    changed, newval = imgui.Checkbox("Close Doors on Boarding", toLoadHub.settings.door.close_boarding)
+    if changed then toLoadHub.settings.door.close_boarding , setSave = newval, true end
 
-    changed, newval = imgui.Checkbox("Close Doors on Deboarding", settings.door.close_deboarding)
-    if changed then toLoadHub.settings.door.close_deboarding = newval end
+    changed, newval = imgui.Checkbox("Close Doors on Deboarding", toLoadHub.settings.door.close_deboarding)
+    if changed then toLoadHub.settings.door.close_deboarding , setSave = newval, true end
+
+    if setSave then
+        saveSettingsToFile(false)
+        setSave = false
+    end
 end
 
-local function loadToloadHubWindow()
+function loadToloadHubWindow()
     if not toLoadHub.visible_main then
-        openToLoadHubWindow()
+        openToLoadHubWindow(true)
     end
 end
 
-local function toggleToloadHubWindow()
-    if toLoadHub.visible_main then
-        float_wnd_destroy(toloadhub_window)
-    end
-    if toLoadHub.visible_settings then
-        float_wnd_destroy(toloadhub_window_settings)
-    end
+function toggleToloadHubWindow()
     if toLoadHub.visible_main or toLoadHub.visible_settings then
-        toLoadHub.visible_main = false
-        toLoadHub.visible_settings = false
+        float_wnd_destroy(toloadhub_window)
         return
     end
     loadToloadHubWindow()
@@ -324,12 +347,12 @@ then
     if toLoadHub.settings.general.auto_init then
         resetAirplaneParameters()
     end
-    add_macro("ToLoad Hub", "toggleToloadHubWindow()")
+    add_macro("ToLoad Hub", "loadToloadHubWindow()")
     create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
 
     if toLoadHub.settings.general.auto_open then
        loadToloadHubWindow()
     end
-    do_on_exit("saveSettingsToFile()")
+    do_on_exit("saveSettingsToFile(true)")
     debug(string.format("[%s] Plugin fully loaded.", toLoadHub.title))
 end
