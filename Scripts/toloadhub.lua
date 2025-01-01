@@ -7,6 +7,7 @@
     A FlyWithLua plugin for X-Plane 12 to manage passengers and loadsheet for ToLISS airplanes.
     Features include automatic loading from SimBrief, random passenger generation, and real-time loading.
 
+    TODO: Missing max Fuel and Cargo for A339 and A346
     License: MIT License
 --]]
 local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A346 = true, A339 = true }
@@ -23,9 +24,14 @@ local toLoadHub = {
     visible_main = false,
     visible_settings = false,
     pax_count = 0, -- old intendedPassengerNumber
-    pax_onboard = 0, -- old passengerBoarded
     max_passenger = 224,
+    max_cargo_fwd = 3000,
+    max_cargo_aft = 5000,
+    max_fuel = 20000,
+    cargo = 0,
+    fuel_plan_ramp = 0, -- OFP BLOCK FUEL
     pax_distribution_range = {35, 60},
+    cargo_fwd_distribution_range = {55, 75},
     first_init = false,
     phases = {
         is_onboarded = false,
@@ -38,6 +44,8 @@ local toLoadHub = {
     boarding_speed = 0,
     boarding_secnds_per_pax = 0,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
+    wait_until_speak = os.time(),
+    what_to_speak = nil,
     settings = {
         general = {
             debug = false,
@@ -51,6 +59,7 @@ local toLoadHub = {
         simbrief = {
             auto_fetch = true,
             randomize_passenger = true,
+            simulate_cargo = true,
             username = ""
         },
         hoppie = {
@@ -58,7 +67,6 @@ local toLoadHub = {
             enable_loadsheet = true
         },
         door = {
-            simulate_cargo = false,
             close_boarding = true,
             close_deboarding = true
         }
@@ -159,14 +167,25 @@ local function fetchSimbriefFPlan()
         toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
     end
+
+    local cargo = xml_data:find("cargo")
+    toLoadHub.cargo = tonumber(cargo[1])
+
+    local plan_ramp = xml_data:find("plan_ramp")
+    toLoadHub.fuel_plan_ramp = tonumber(plan_ramp[1])
+
     debug(string.format("[%s] SimBrief XML downloaded and parsed.", toLoadHub.title))
 end
 
-local function setAirplanePassengerNumber()
+local function setAirplaneNumbers()
     if PLANE_ICAO == "A319" then
         toLoadHub.max_passenger = 145
+        toLoadHub.max_cargo_fwd = 2268
+        toLoadHub.max_cargo_aft = 4518
     elseif PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" then
         local a321EngineTypeIndex = dataref_table("AirbusFBW/EngineTypeIndex")
+        toLoadHub.max_cargo_fwd = 5670
+        toLoadHub.max_cargo_aft = 7167
         if a321EngineTypeIndex[0] == 0 or a321EngineTypeIndex[0] == 1 then
             toLoadHub.max_passenger = 220
         else
@@ -174,6 +193,9 @@ local function setAirplanePassengerNumber()
         end
     elseif PLANE_ICAO == "A20N" then
         toLoadHub.max_passenger = 188
+        toLoadHub.max_cargo_fwd = 3402
+        toLoadHub.max_cargo_aft = 6033
+        toLoadHub.max_fuel = 18623
     elseif PLANE_ICAO == "A339" then
         toLoadHub.max_passenger = 375
     elseif PLANE_ICAO == "A346" then
@@ -186,10 +208,13 @@ local function resetAirplaneParameters()
     toLoadHub_PaxDistrib = 0.5
 
     toLoadHub.pax_count = 0
-    toLoadHub.pax_onboard = 0
+    toLoadHub.cargo = 0
+    toLoadHub.fuel_plan_ramp = 0
     toLoadHub.boarding_speed = 0
     toLoadHub.boarding_secnds_per_pax =0
     toLoadHub.next_boarding_check = os.time()
+    toLoadHub.wait_until_speak = os.time()
+    toLoadHub.what_to_speak = nil
     for key in pairs(toLoadHub.phases) do
         toLoadHub.phases[key] = false
     end
@@ -218,6 +243,30 @@ local function setRandomNumberOfPassengers()
             return
         end
     end
+end
+
+local function playChimeSound()
+    command_once( "AirbusFBW/CheckCabin" )
+    if toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarded then
+        toLoadHub.what_to_speak = "Boarding Completed"
+    end
+    if toLoadHub.phases.is_onboarded and toLoadHub.phases.is_deboarded then
+        toLoadHub.what_to_speak = "Deboarding Completed"
+    end
+    toLoadHub.wait_until_speak = os.time() + 0.8
+end
+
+local function closeDoors(boarding)
+    if not toLoadHub.settings.door.close_boarding and boarding then return end
+    if not toLoadHub.settings.door.close_deboarding and not boarding then return end
+
+    toLoadHub_Doors_1 = 0
+    toLoadHub_Doors_2 = 0
+    if PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339" then
+        toLoadHub_Doors_6 = 0
+    end
+    toLoadHub_CargoDoors_1 = 0
+    toLoadHub_CargoDoors_2 = 0
 end
 
 -- == X-Plane Functions ==
@@ -260,12 +309,23 @@ function viewToLoadHubWindow()
         return
     end
 
-    -- Starting Onboarding and Passenger Selection
+    -- Starting Onboarding and Passenger/Cargo Selection
     if not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
         local passengeraNumberChanged, newPassengerNumber = imgui.SliderInt("Passengers number", toLoadHub.pax_count, 0, toLoadHub.max_passenger, "Value: %d")
         if passengeraNumberChanged then
             toLoadHub.pax_count = newPassengerNumber
         end
+
+        local cargoNumberChanged, newCargoNumber = imgui.SliderInt("Cargo KG", toLoadHub.cargo, 0, toLoadHub.max_cargo_aft + toLoadHub.max_cargo_aft, "Value: %d")
+        if cargoNumberChanged then
+            toLoadHub.cargo = newCargoNumber
+        end
+
+        local fuelNumberChanged, newFuelNumber = imgui.SliderInt("Fuel KG", toLoadHub.fuel_plan_ramp, 0, toLoadHub.max_fuel, "Value: %d")
+        if fuelNumberChanged then
+            toLoadHub.fuel_plan_ramp = newFuelNumber
+        end
+
         if imgui.Button("Get from Simbrief") then
             fetchSimbriefFPlan()
         end
@@ -296,7 +356,31 @@ function viewToLoadHubWindow()
         end
     end
 
-    -- loading Time Selector
+    -- Onboarding Phase
+    if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_onboarded then
+        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+        imgui.TextUnformatted(string.format("Boarding in progress %s / %s boarded", toLoadHub_NoPax, toLoadHub.pax_count))
+        imgui.PopStyleColor()
+        if imgui.Button("Pause Boarding") then
+            toLoadHub.phases.is_deboarding_pause = true
+        end
+    end
+
+    -- Onboarding Phase Pause
+    if toLoadHub.phases.is_onboarding and toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_onboarded then
+        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
+        imgui.TextUnformatted(string.format("Remaining passengers to board: %s / %s", toLoadHub.pax_count-toLoadHub_NoPax, toLoadHub.pax_count))
+        imgui.PopStyleColor()
+        if imgui.Button("Resume Boarding") then
+            toLoadHub.phases.is_deboarding_pause = false
+        end
+        imgui.SameLine(10)
+        if imgui.Button("Reset") then
+            resetAirplaneParameters()
+        end
+    end
+
+    -- Time Selector for passengers
     if toLoadHub.pax_count >0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_deboarded and not toLoadHub.phases.is_deboarding then
         local generalSpeed = 3
         if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) and (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) then
@@ -332,6 +416,7 @@ function viewToLoadHubWindow()
         end
     end
 
+    -- Settings Menu Button
     if not toLoadHub.visible_settings then
         imgui.Separator()
         imgui.Spacing()
@@ -390,16 +475,20 @@ function viewToLoadHubWindowSettings()
     imgui.TextUnformatted("SimBrief Settings:")
     imgui.PopStyleColor()
 
+    imgui.TextUnformatted("Username:")
+    imgui.SameLine(75)
+    changed, newval = imgui.InputText("##username", toLoadHub.settings.simbrief.username, 50)
+    if changed then toLoadHub.settings.simbrief.username , setSave = newval, true end
+
     changed, newval = imgui.Checkbox("Auto Fetch at beginning", toLoadHub.settings.simbrief.auto_fetch)
     if changed then toLoadHub.settings.simbrief.auto_fetch , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Randomize Passenger", toLoadHub.settings.simbrief.randomize_passenger)
     if changed then toLoadHub.settings.simbrief.randomize_passenger , setSave = newval, true end
-    
-    imgui.TextUnformatted("Username:")
-    imgui.SameLine(75)
-    changed, newval = imgui.InputText("##username", toLoadHub.settings.simbrief.username, 50)
-    if changed then toLoadHub.settings.simbrief.username , setSave = newval, true end
+
+    changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.simbrief.simulate_cargo)
+    if changed then toLoadHub.settings.simbrief.simulate_cargo , setSave = newval, true end
+
     imgui.Separator()
     imgui.Spacing()
 
@@ -423,13 +512,10 @@ function viewToLoadHubWindowSettings()
     imgui.TextUnformatted("Door Settings:")
     imgui.PopStyleColor()
 
-    changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.door.simulate_cargo)
-    if changed then toLoadHub.settings.door.simulate_cargo , setSave = newval, true end
-
-    changed, newval = imgui.Checkbox("Close Doors on Boarding", toLoadHub.settings.door.close_boarding)
+    changed, newval = imgui.Checkbox("Close Doors after Boarding", toLoadHub.settings.door.close_boarding)
     if changed then toLoadHub.settings.door.close_boarding , setSave = newval, true end
 
-    changed, newval = imgui.Checkbox("Close Doors on Deboarding", toLoadHub.settings.door.close_deboarding)
+    changed, newval = imgui.Checkbox("Close Doors after Deboarding", toLoadHub.settings.door.close_deboarding)
     if changed then toLoadHub.settings.door.close_deboarding , setSave = newval, true end
 
     if setSave then
@@ -452,14 +538,52 @@ function toggleToloadHubWindow()
     loadToloadHubWindow()
 end
 
+-- == Main Loop Often (1 Sec) ==
+function toloadHubMainLoop()
+    local now = os.time()
+
+    -- Speak Onboarding/Deboarding Status after the Cabin
+    if toLoadHub.what_to_speak and now > toLoadHub.wait_until_speak then
+        XPLMSpeakString(toLoadHub.what_to_speak)
+        toLoadHub.what_to_speak = nil
+    end
+
+    -- Onboarding Phase and Finishing Onboarding
+    if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
+        if toLoadHub_NoPax < toLoadHub.pax_count and now > toLoadHub.next_boarding_check then
+            toLoadHub_NoPax = toLoadHub_NoPax + 1
+            command_once("AirbusFBW/SetWeightAndCG")
+            toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-2, 2)
+        end
+
+        if toLoadHub_NoPax >= toLoadHub.pax_count then
+            toLoadHub.phases.is_onboarded = true
+            playChimeSound()
+            if not toLoadHub.visible_main and not toLoadHub.visible_settings then
+                openToLoadHubWindow(true)
+            elseif not toLoadHub.visible_main and toLoadHub.visible_settings then
+                toLoadHub.visible_settings = false
+                toLoadHub.visible_main = true
+                openToLoadHubWindow(false)
+            end
+            closeDoors(true)
+        end
+    end
+end
+
 -- == Main code ==
 debug(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
 dataref("toLoadHub_NoPax", "AirbusFBW/NoPax", "writeable")
 dataref("toLoadHub_PaxDistrib", "AirbusFBW/PaxDistrib", "writeable")
 dataref("toLoadHub_Doors_1", "AirbusFBW/PaxDoorModeArray", "writeable", 0)
 dataref("toLoadHub_Doors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 2)
+dataref("toLoadHub_Doors_6", "AirbusFBW/PaxDoorModeArray", "writeable", 6)
 
-setAirplanePassengerNumber()
+dataref("toLoadHub_CargoDoors_1", "AirbusFBW/CargoDoorModeArray", "writeable", 0)
+dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1)
+
+
+setAirplaneNumbers()
 readSettingsToFile()
 
 if toLoadHub.settings.general.auto_init then
@@ -470,6 +594,7 @@ if toLoadHub.settings.simbrief.auto_fetch then
 end
 add_macro("ToLoad Hub", "loadToloadHubWindow()")
 create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
+do_often("toloadHubMainLoop()")
 
 if toLoadHub.settings.general.auto_open then
     loadToloadHubWindow()
