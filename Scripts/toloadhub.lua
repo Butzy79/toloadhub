@@ -33,10 +33,10 @@ local toLoadHub = {
         simbrief = {
             auto_fetch = true,
             randomize_passenger = true,
-            username = nil
+            username = ""
         },
         hoppie = {
-            secret = nil,
+            secret = "",
             enable_loadsheet = true
         },
         door = {
@@ -59,8 +59,10 @@ local xml = require('LuaXml')
 math.randomseed(os.time())
 
 -- == Helper Functions ==
-local function debug()
-    return toLoadHub.settings.general.debug
+local function debug(stringToLog)
+    if toLoadHub.settings.general.debug then
+        logMsg(stringToLog)
+    end
 end
 
 local function toBoolean(value)
@@ -75,13 +77,15 @@ end
 
 -- == Utility Functions ==
 local function saveSettingsToFile()
-    debug() and logMsg(string.format("[%s] saveSettingsToFile()", toLoadHub.title))
-    LIP.save(SCRIPT_DIRECTORY.. DIRECTORY_SEPARATOR .. toLoadHub.file, toLoadHub.settings)
-    debug() and logMsg(string.format("[%s] file saved", toLoadHub.title))
+    debug(string.format("[%s] saveSettingsToFile()", toLoadHub.title))
+    LIP.save(SCRIPT_DIRECTORY .. toLoadHub.file, toLoadHub.settings)
+    debug(string.format("[%s] file saved", toLoadHub.title))
 end
 
 local function readSettingsToFile()
-    local f = LIP.load(SCRIPT_DIRECTORY.. DIRECTORY_SEPARATOR .. toLoadHub.file)
+    local file, err = io.open(SCRIPT_DIRECTORY .. toLoadHub.file, 'r')
+    if not file then return end
+    local f = LIP.load(SCRIPT_DIRECTORY .. toLoadHub.file)
     if not f then return end
     for section, settings in pairs(f) do
         if toLoadHub.settings[section] then
@@ -102,25 +106,25 @@ end
 
 local function fetchSimbriefFPlan()
     if toLoadHub.settings.simbrief.username == nil then
-        debug() and logMsg(string.format("[%s] SimBrief username not set.", toLoadHub.title))
+        debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
         return false
     end
 
     local response_xml, statusCode = http.request(urls.simbrief_fplan)
     if statusCode ~= 200 then
-        debug() and logMsg(string.format("[%s] SimBrief API returned an error: [%d]", toLoadHub.title, statusCode))
+        debug(string.format("[%s] SimBrief API returned an error: [%d]", toLoadHub.title, statusCode))
         return false
     end
 
     local xml_data = xml.eval(response_xml)
     if not xml_data then
-        debug() and logMsg(string.format("[%s] XML from SimBrief not valid.", toLoadHub.title))
+        debug(string.format("[%s] XML from SimBrief not valid.", toLoadHub.title))
         return false
     end
 
     local status = xml_data.OFP.fetch.status[1]
     if not status or status  ~= "Success" then
-        debug() and logMsg(string.format("[%s] Simbrief Status not Success.", toLoadHub.title))
+        debug(string.format("[%s] Simbrief Status not Success.", toLoadHub.title))
         return false
     end
 
@@ -130,7 +134,7 @@ local function fetchSimbriefFPlan()
 	    toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
     end
-    debug() and logMsg(string.format("[%s] SimBrief XML downloaded and parsed.", toLoadHub.title))
+    debug(string.format("[%s] SimBrief XML downloaded and parsed.", toLoadHub.title))
 end
 
 local function setAirplanePassengerNumber()
@@ -158,7 +162,7 @@ local function resetAirplaneParameters()
     toLoadHub.pax_count = 0
     toLoadHub.first_init = true
     command_once("AirbusFBW/SetWeightAndCG")
-    debug() and logMsg(string.format("[%s] Reset parameters done", toLoadHub.title))
+    debug(string.format("[%s] Reset parameters done", toLoadHub.title))
 end
 
 -- == X-Plane Functions ==
@@ -300,7 +304,7 @@ end
 if PLANE_ICAO == "A319" or PLANE_ICAO == "A20N" or PLANE_ICAO == "A321" or
    PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339"
 then
-    debug() and logMsg(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
+    debug(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
     dataref("toLoadHub_NoPax", "AirbusFBW/NoPax", "writeable")
     dataref("toLoadHub_PaxDistrib", "AirbusFBW/PaxDistrib", "writeable")
     setAirplanePassengerNumber()
@@ -318,5 +322,5 @@ then
        toggleToloadHubWindow(true)
     end
     do_on_exit("saveSettingsToFile()")
-    debug() and logMsg(string.format("[%s] Plugin fully loaded.", toLoadHub.title))
+    debug(string.format("[%s] Plugin fully loaded.", toLoadHub.title))
 end
