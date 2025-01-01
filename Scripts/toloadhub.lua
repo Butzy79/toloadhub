@@ -288,24 +288,25 @@ function viewToLoadHubWindowSettings()
     if changed then toLoadHub.settings.door.close_deboarding = newval end
 end
 
-local function toggleToloadHubWindow(onlyOpen)
-    if not onlyOpen then
-        if toLoadHub.visible_main then
-            float_wnd_destroy(toloadhub_window)
-        end
-        if toLoadHub.visible_settings then
-            float_wnd_destroy(toloadhub_window_settings)
-        end
-        if toLoadHub.visible_main or toLoadHub.visible_settings then
-            toLoadHub.visible_main = false
-            toLoadHub.visible_settings = false
-            return
-        end
-    end
-
+local function loadToloadHubWindow()
     if not toLoadHub.visible_main then
         openToLoadHubWindow()
     end
+end
+
+local function toggleToloadHubWindow()
+    if toLoadHub.visible_main then
+        float_wnd_destroy(toloadhub_window)
+    end
+    if toLoadHub.visible_settings then
+        float_wnd_destroy(toloadhub_window_settings)
+    end
+    if toLoadHub.visible_main or toLoadHub.visible_settings then
+        toLoadHub.visible_main = false
+        toLoadHub.visible_settings = false
+        return
+    end
+    loadToloadHubWindow()
 end
 
 -- == Main code ==
@@ -323,11 +324,11 @@ then
     if toLoadHub.settings.general.auto_init then
         resetAirplaneParameters()
     end
-    add_macro("ToLoad Hub", "toggleToloadHubWindow(true)")
-    create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow(false)", "", "")
+    add_macro("ToLoad Hub", "toggleToloadHubWindow()")
+    create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
 
     if toLoadHub.settings.general.auto_open then
-       toggleToloadHubWindow(true)
+       loadToloadHubWindow()
     end
     do_on_exit("saveSettingsToFile()")
     debug(string.format("[%s] Plugin fully loaded.", toLoadHub.title))
