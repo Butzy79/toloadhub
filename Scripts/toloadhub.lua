@@ -1,7 +1,7 @@
 --[[
     ToLoadHUB
     Author: Manta32
-    Special thanks to: @ aka Giulio Cataldo for the night spent suffering with me
+    Special thanks to: Giulio Cataldo for the night spent suffering with me
     Initial project by: @piotr-tomczyk aka @travisair
     Thanks to: @hotbso for the idea
     Description:
