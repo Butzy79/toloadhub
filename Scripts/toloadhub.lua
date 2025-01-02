@@ -1,8 +1,9 @@
 --[[
     ToLoadHUB
     Author: Manta32
-    Idea and by: @piotr-tomczyk aka @travisair  
-    Special thanks to: @hotbso for the support
+    Special thanks to: @ aka Giulio Cataldo for the night spent suffering with me
+    Initial project by: @piotr-tomczyk aka @travisair
+    Thanks to: @hotbso for the idea
     Description:
     A FlyWithLua plugin for X-Plane 12 to manage passengers and loadsheet for ToLISS airplanes.
     Features include automatic loading from SimBrief, random passenger generation, and real-time loading.
@@ -133,11 +134,11 @@ end
 -- == Utility Functions ==
 function saveSettingsToFileToLoadHub(final)
     debug(string.format("[%s] saveSettingsToFileToLoadHub(%s)", toLoadHub.title, tostring(final)))
-    if final or not final then
+    if final and (toLoadHub.visible_settings or toLoadHub.visible_main) then
         local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
         local scrLeft, scrTop, scrRight, scrBottom = XPLMGetScreenBoundsGlobal()
-        toLoadHub.settings.general.window_x = wLeft - scrLeft
-        toLoadHub.settings.general.window_y = wBottom - scrBottom
+        toLoadHub.settings.general.window_x = math.max(scrLeft, wLeft - scrLeft)
+        toLoadHub.settings.general.window_y = math.max(scrBottom, wBottom - scrBottom)
     end
 
     LIP.save(SCRIPT_DIRECTORY .. toLoadHub.file, toLoadHub.settings)
@@ -152,10 +153,10 @@ local function readSettingsToFile()
     for section, settings in pairs(f) do
         if toLoadHub.settings[section] then
             for key, value in pairs(settings) do
-                if toLoadHub.settings[section][key] then
+                if toLoadHub.settings[section][key] ~= nil then
                     if type(toLoadHub.settings[section][key]) == 'boolean' then
                         toLoadHub.settings[section][key] = toBoolean(value)
-                    elseif type(value) == 'number' then
+                    elseif type(toLoadHub.settings[section][key]) == 'number' then
                         toLoadHub.settings[section][key] = math.floor(value)
                     else
                         toLoadHub.settings[section][key] = value
@@ -210,10 +211,12 @@ local function setAirplaneNumbers()
         toLoadHub.max_passenger = 145
         toLoadHub.max_cargo_fwd = 2268
         toLoadHub.max_cargo_aft = 4518
+        toLoadHub.max_fuel = 18728
     elseif PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" then
         local a321EngineTypeIndex = dataref_table("AirbusFBW/EngineTypeIndex")
         toLoadHub.max_cargo_fwd = 5670
         toLoadHub.max_cargo_aft = 7167
+        toLoadHub.max_fuel = 23207
         if a321EngineTypeIndex[0] == 0 or a321EngineTypeIndex[0] == 1 then
             toLoadHub.max_passenger = 220
         else
@@ -403,7 +406,9 @@ local function sendLoadsheetToToliss()
     -- ZWF Applied = toliss_airbus/iscsinterface/zfw
     -- ZWFCG Applied = toliss_airbus/iscsinterface/zfwCG
     -- FUEL Block TO apply = toliss_airbus/iscsinterface/setNewBlockFuel
-     if toLoadHub.settings.hoppie.secret == nil or not toLoadHub.settings.hoppie.secret:gsub("^%s*(.-)%s*$", "%1") then
+    debug(string.format("[%s] Starting Loadsheet composition.", toLoadHub.title))
+
+    if toLoadHub.settings.hoppie.secret == nil or not toLoadHub.settings.hoppie.secret:gsub("^%s*(.-)%s*$", "%1") then
         debug(string.format("[%s] Hoppie secret not set.", toLoadHub.title))
         return false
     end
@@ -437,6 +442,8 @@ local function sendLoadsheetToToliss()
         },
         source = ltn12.source.string(payload),
     }
+    debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
+
     if code == 200 then toLoadHub.loadsheet_sent = true end
 end
 
@@ -609,7 +616,6 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
 
         if not toLoadHub.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet then
-            toLoadHub.loadsheet_sent = true
             sendLoadsheetToToliss()
         end
 
