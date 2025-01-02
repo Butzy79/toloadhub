@@ -50,7 +50,7 @@ local toLoadHub = {
         general = {
             debug = false,
             window_width = 400,
-            window_height = 200,
+            window_height = 250,
             window_x = 160,
             window_y = 200,
             auto_open = true,
@@ -343,6 +343,7 @@ function viewToLoadHubWindow()
                     toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
                     toLoadHub.next_boarding_check = os.time()
                     toLoadHub.phases.is_onboarding = true
+                    command_once("sim/ground_ops/toggle_window")
                 end
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
@@ -357,31 +358,31 @@ function viewToLoadHubWindow()
     end
 
     -- Onboarding Phase
-    if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_onboarded then
+    if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-        imgui.TextUnformatted(string.format("Boarding in progress %s / %s boarded", toLoadHub_NoPax, toLoadHub.pax_count))
+        imgui.TextUnformatted(string.format("Boarding in progress %s / %s boarded", math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
         imgui.PopStyleColor()
         if imgui.Button("Pause Boarding") then
-            toLoadHub.phases.is_deboarding_pause = true
+            toLoadHub.phases.is_onboarding_pause = true
         end
     end
 
     -- Onboarding Phase Pause
-    if toLoadHub.phases.is_onboarding and toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_onboarded then
+    if toLoadHub.phases.is_onboarding and toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
-        imgui.TextUnformatted(string.format("Remaining passengers to board: %s / %s", toLoadHub.pax_count-toLoadHub_NoPax, toLoadHub.pax_count))
+        imgui.TextUnformatted(string.format("Remaining passengers to board: %s / %s", toLoadHub.pax_count-math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
         imgui.PopStyleColor()
         if imgui.Button("Resume Boarding") then
-            toLoadHub.phases.is_deboarding_pause = false
+            toLoadHub.phases.is_onboarding_pause = false
         end
-        imgui.SameLine(10)
+        imgui.SameLine(150)
         if imgui.Button("Reset") then
             resetAirplaneParameters()
         end
     end
 
     -- Time Selector for passengers
-    if toLoadHub.pax_count >0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_deboarded and not toLoadHub.phases.is_deboarding then
+    if toLoadHub.pax_count >0 and not toLoadHub.phases.is_onboarded and (not toLoadHub.phases.is_onboarding or toLoadHub.phases.is_onboarding_pause) and not toLoadHub.phases.is_deboarded and not toLoadHub.phases.is_deboarding then
         local generalSpeed = 3
         if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) and (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF43B54B)
@@ -551,9 +552,12 @@ function toloadHubMainLoop()
     -- Onboarding Phase and Finishing Onboarding
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         if toLoadHub_NoPax < toLoadHub.pax_count and now > toLoadHub.next_boarding_check then
-            toLoadHub_NoPax = toLoadHub_NoPax + 1
-            command_once("AirbusFBW/SetWeightAndCG")
-            toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-2, 2)
+            if toLoadHub.boarding_speed == 0 then
+                toLoadHub_NoPax = toLoadHub.pax_count
+            else
+                toLoadHub_NoPax = toLoadHub_NoPax + 1
+                toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-2, 2)
+            end
         end
 
         if toLoadHub_NoPax >= toLoadHub.pax_count then
