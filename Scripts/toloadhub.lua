@@ -36,12 +36,18 @@ local toLoadHub = {
     cargo_fwd_distribution_range = {55, 75},
     cargo_starting_range = {45, 60},
     cargo_speeds = {0, 3, 6},
+    boarding_secnds_per_cargo_unit = 0,
+    kgPerUnit = 50,
     first_init = false,
     phases = {
         is_fuel_started = false,
         is_fuel_completed = false,
         is_onboarding = false,
+        is_pax_onboarded = false,
+        is_pax_deboarded = false,
         is_cargo_started = false,
+        is_cargo_onboarded = false,
+        is_cargo_deboarded = false,
         is_onboarding_pause = false,
         is_onboarded = false,
         is_deboarding = false,
@@ -50,7 +56,6 @@ local toLoadHub = {
     },
     boarding_speed = 0,
     boarding_secnds_per_pax = 0,
-    boarding_secnds_per_10kg = 0,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     next_cargo_check = os.time(),
     wait_until_speak = os.time(),
@@ -59,6 +64,7 @@ local toLoadHub = {
     deboarding_sound_played = false,
     boarding_cargo_sound_played = false,
     deboarding_cargo_sound_played = false,
+    full_deboard_sound = false,
     loadsheet_sent = false,
     settings = {
         general = {
@@ -75,10 +81,10 @@ local toLoadHub = {
         simbrief = {
             auto_fetch = true,
             randomize_passenger = true,
-            username = nil
+            username = ""
         },
         hoppie = {
-            secret = nil,
+            secret = "",
             enable_loadsheet = true
         },
         door = {
@@ -117,6 +123,11 @@ local function toBoolean(value)
         return true
     end
     return false
+end
+
+local function calculateTimeWithCargo(a, b)
+    local res = a / 2 + b
+    return (res < a and a) or (res < b and b) or res
 end
 
 -- == Utility Functions ==
@@ -233,7 +244,7 @@ local function resetAirplaneParameters()
     toLoadHub.fuel_plan_ramp = 0
     toLoadHub.boarding_speed = 0
     toLoadHub.boarding_secnds_per_pax = 0
-    toLoadHub.boarding_secnds_per_10kg = 0
+    toLoadHub.boarding_secnds_per_cargo_unit = 0
     toLoadHub.next_boarding_check = os.time()
     toLoadHub.next_cargo_check = os.time()
     toLoadHub.wait_until_speak = os.time()
@@ -242,6 +253,7 @@ local function resetAirplaneParameters()
     toLoadHub.deboarding_sound_played = false
     toLoadHub.boarding_cargo_sound_played = false
     toLoadHub.deboarding_cargo_sound_played = false
+    toLoadHub.full_deboard_sound = false
     toLoadHub.loadsheet_sent = false
     for key in pairs(toLoadHub.phases) do
         toLoadHub.phases[key] = false
@@ -275,32 +287,49 @@ end
 
 local function playChimeSound()
     if toLoadHub.what_to_speak then return end
-    if toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarded then
-        command_once( "AirbusFBW/CheckCabin" )
-        toLoadHub.what_to_speak = "Boarding Completed"
+    if toLoadHub.phases.is_pax_onboarded and not toLoadHub.phases.is_pax_deboarded then
+        if toLoadHub.pax_count > 0 then
+            command_once( "AirbusFBW/CheckCabin" )
+            toLoadHub.what_to_speak = "Boarding Passenger Completed"
+            toLoadHub.wait_until_speak = os.time() + 2
+        end
         toLoadHub.boarding_sound_played = true
-        toLoadHub.wait_until_speak = os.time() + 2
     end
-    if toLoadHub.phases.is_onboarded and toLoadHub.phases.is_deboarded then
-        command_once( "AirbusFBW/CheckCabin" )
-        toLoadHub.what_to_speak = "Deboarding Completed"
+    if toLoadHub.phases.is_pax_deboarded then
+        if toLoadHub.pax_count > 0 then
+            command_once( "AirbusFBW/CheckCabin" )
+            toLoadHub.what_to_speak = "Deboarding Passenger Completed"
+            toLoadHub.wait_until_speak = os.time() + 2
+        end
         toLoadHub.deboarding_sound_played = true
-        toLoadHub.wait_until_speak = os.time() + 2
     end
 end
 
 local function playCargoSound()
     if toLoadHub.what_to_speak then return end
-    if toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarded then
-        toLoadHub.what_to_speak = "Cargo Loading Completed"
+    if toLoadHub.phases.is_cargo_onboarded and not toLoadHub.phases.is_cargo_deboarded then
+        if toLoadHub.cargo > 0 then
+            toLoadHub.what_to_speak = "Cargo Loading Completed"
+            toLoadHub.wait_until_speak = os.time() + 2
+        end
         toLoadHub.boarding_cargo_sound_played = true
-        toLoadHub.wait_until_speak = os.time() + 2
     end
-    if toLoadHub.phases.is_onboarded and toLoadHub.phases.is_deboarded then
-        toLoadHub.what_to_speak = "Cargo Unloading Completed"
+    if toLoadHub.phases.is_cargo_deboarded then
+        if toLoadHub.cargo > 0 then
+            toLoadHub.what_to_speak = "Cargo Unloading Completed"
+            toLoadHub.wait_until_speak = os.time() + 2
+        end
         toLoadHub.deboarding_cargo_sound_played = true
+    end
+end
+
+local function playFinalSound()
+    if toLoadHub.what_to_speak then return end
+    if toLoadHub.cargo > 0 and toLoadHub.pax_count > 0 then
+        toLoadHub.what_to_speak = "Flight completed, all passengers and cargo have been deboarded."
         toLoadHub.wait_until_speak = os.time() + 2
     end
+    toLoadHub.full_deboard_sound = true
 end
 
 local function closeDoors(boarding)
@@ -343,11 +372,11 @@ end
 local function addingCargoFwdAft()
     local someChanges = false
     if toLoadHub_AftCargo < toLoadHub.cargo_aft then
-        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + 10, toLoadHub.cargo_aft)
+        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + toLoadHub.kgPerUnit, toLoadHub.cargo_aft)
         someChanges = true
     end
     if toLoadHub_FwdCargo < toLoadHub.cargo_fwd then
-        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + 10, toLoadHub.cargo_fwd)
+        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + toLoadHub.kgPerUnit, toLoadHub.cargo_fwd)
         someChanges = true
     end
     return someChanges
@@ -356,11 +385,11 @@ end
 local function removingCargoFwdAft()
     local someChanges = false
     if toLoadHub_AftCargo > 0 then
-        toLoadHub_AftCargo = math.max(toLoadHub_AftCargo - 10, 0)
+        toLoadHub_AftCargo = math.max(toLoadHub_AftCargo - toLoadHub.kgPerUnit, 0)
         someChanges = true
     end
     if toLoadHub_FwdCargo > 0 then
-        toLoadHub_FwdCargo = math.max(toLoadHub_FwdCargo - 10, 0)
+        toLoadHub_FwdCargo = math.max(toLoadHub_FwdCargo - toLoadHub.kgPerUnit, 0)
         someChanges = true
     end
     return someChanges
@@ -486,7 +515,6 @@ function viewToLoadHubWindow()
                     toLoadHub.next_boarding_check = os.time()
                     toLoadHub.next_cargo_check = os.time()
                     toLoadHub.phases.is_onboarding = true
-                    command_once("sim/ground_ops/toggle_window")
                 end
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
@@ -502,21 +530,42 @@ function viewToLoadHubWindow()
 
     -- Onboarding Phase
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
-        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-        imgui.TextUnformatted(string.format("Boarding in progress %s / %s boarded", math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
-        imgui.PopStyleColor()
-        if toLoadHub.phases.is_cargo_started then
-            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
-            imgui.TextUnformatted(string.format("Cargo in progress:"))
-            imgui.Spacing()
-            imgui.SameLine(50)
-            imgui.TextUnformatted(string.format("FWD %.1f T / %.1f T loaded", toLoadHub_FwdCargo / 1000, toLoadHub.cargo_fwd / 1000))
-            imgui.SameLine(250)
-            imgui.TextUnformatted(string.format("AFT %.1f T / %.1f T loaded", toLoadHub_AftCargo / 1000, toLoadHub.cargo_aft / 1000))
+        if toLoadHub.pax_count > 0 and not toLoadHub.phases.is_pax_onboarded then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+            imgui.TextUnformatted(string.format("Boarding in progress %s / %s boarded", math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
+            imgui.PopStyleColor()
+        elseif toLoadHub.pax_count > 0 and toLoadHub.phases.is_pax_onboarded then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
+            imgui.TextUnformatted(string.format("Passenger onboarded %s", toLoadHub_NoPax))
             imgui.PopStyleColor()
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
-            imgui.TextUnformatted(string.format("Cargo loading has not started yet."))
+            imgui.TextUnformatted(string.format("No passenger to onboard"))
+            imgui.PopStyleColor()
+        end
+        if toLoadHub.cargo > 0 and not toLoadHub.phases.is_cargo_onboarded then
+            if toLoadHub.phases.is_cargo_started then
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                imgui.TextUnformatted(string.format("Cargo in progress:"))
+                imgui.Spacing()
+                imgui.SameLine(50)
+                imgui.TextUnformatted(string.format("FWD %.2f T / %.2f T loaded", toLoadHub_FwdCargo / 1000, toLoadHub.cargo_fwd / 1000))
+                imgui.Spacing()
+                imgui.SameLine(50)
+                imgui.TextUnformatted(string.format("AFT %.2f T / %.2f T loaded", toLoadHub_AftCargo / 1000, toLoadHub.cargo_aft / 1000))
+                imgui.PopStyleColor()
+            else
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
+                imgui.TextUnformatted(string.format("Cargo loading has not started yet."))
+                imgui.PopStyleColor()
+            end
+        elseif toLoadHub.cargo > 0 and toLoadHub.phases.is_cargo_onboarded then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
+            imgui.TextUnformatted(string.format("Cargo loaded %.2f T", (toLoadHub_AftCargo + toLoadHub_FwdCargo) / 1000 ))
+            imgui.PopStyleColor()
+        else
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
+            imgui.TextUnformatted(string.format("No extra cargo to load"))
             imgui.PopStyleColor()
         end
 
@@ -528,8 +577,12 @@ function viewToLoadHubWindow()
     -- Onboarding Phase Pause
     if toLoadHub.phases.is_onboarding and toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
-        imgui.TextUnformatted(string.format("Remaining passengers to board: %s / %s", toLoadHub.pax_count-math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
-        imgui.TextUnformatted(string.format("Remaining cargo to load: %.1f T / %.1f T", (toLoadHub.cargo - toLoadHub_FwdCargo + toLoadHub_AftCargo) / 1000, toLoadHub.cargo / 1000))
+        if toLoadHub.pax_count > 0 and not toLoadHub.phases.is_pax_onboarded then
+            imgui.TextUnformatted(string.format("Remaining passengers to board: %s / %s", toLoadHub.pax_count-math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
+        end
+        if toLoadHub.cargo > 0 and not toLoadHub.phases.is_cargo_onboarded then
+            imgui.TextUnformatted(string.format("Remaining cargo to load: %.2f T / %.2f T", (toLoadHub.cargo - (toLoadHub_FwdCargo + toLoadHub_AftCargo)) / 1000, toLoadHub.cargo / 1000))
+        end
         imgui.PopStyleColor()
         if imgui.Button("Resume Boarding") then
             toLoadHub.phases.is_onboarding_pause = false
@@ -547,8 +600,12 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
         imgui.Spacing()
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
-        imgui.TextUnformatted(string.format("Passenger Onboard N. %s", toLoadHub_NoPax))
-        imgui.TextUnformatted(string.format("Cargo loaded %1.f T", (toLoadHub_AftCargo + toLoadHub_FwdCargo) / 1000 ))
+        if toLoadHub.pax_count > 0 then
+            imgui.TextUnformatted(string.format("Passenger onboarded %s", toLoadHub_NoPax))
+        end
+        if toLoadHub.cargo > 0 then
+            imgui.TextUnformatted(string.format("Cargo loaded %.2f T", (toLoadHub_AftCargo + toLoadHub_FwdCargo) / 1000 ))
+        end
         imgui.PopStyleColor()
 
         if not toLoadHub.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet then
@@ -567,21 +624,41 @@ function viewToLoadHubWindow()
         end
     end
 
-     -- Onboarding Phase Pause
-    if toLoadHub.phases.is_deboarding and toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
-        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-        imgui.TextUnformatted(string.format("Deboarding in progress %s / %s deboarded", math.floor(toLoadHub.pax_count - toLoadHub_NoPax), toLoadHub.pax_count))
-        imgui.PopStyleColor()
+     -- Deboarding Phase
+    if toLoadHub.phases.is_deboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
+        if toLoadHub_NoPax > 0 and not toLoadHub.phases.is_pax_deboarded then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+            imgui.TextUnformatted(string.format("Deboarding in progress %s / %s deboarded", math.floor(toLoadHub.pax_count - toLoadHub_NoPax), toLoadHub.pax_count))
+            imgui.PopStyleColor()
+        elseif toLoadHub_NoPax == 0 and toLoadHub.phases.is_pax_deboarded then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
+            imgui.TextUnformatted("Passenger deboarded")
+            imgui.PopStyleColor()
+        else
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
+            imgui.TextUnformatted(string.format("No passenger to deboard"))
+            imgui.PopStyleColor()
+        end
 
-        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
-        imgui.TextUnformatted(string.format("Cargo unloading in progress:"))
-        imgui.Spacing()
-        imgui.SameLine(50)
-        imgui.TextUnformatted(string.format("FWD %.1f T / %.1f T unloaded", (toLoadHub.cargo_fwd - toLoadHub_FwdCargo) / 1000, toLoadHub.cargo_fwd / 1000))
-        imgui.SameLine(250)
-        imgui.TextUnformatted(string.format("AFT %.1f T / %.1f T unloaded", (toLoadHub.cargo_aft - toLoadHub_AftCargo) / 1000, toLoadHub.cargo_aft / 1000))
-        imgui.PopStyleColor()
-
+        if toLoadHub_FwdCargo + toLoadHub_AftCargo > 0 and not toLoadHub.phases.is_cargo_deboarded then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
+            imgui.TextUnformatted(string.format("Cargo unloading in progress:"))
+            imgui.Spacing()
+            imgui.SameLine(50)
+            imgui.TextUnformatted(string.format("FWD %.2f T / %.2f T unloaded", (toLoadHub.cargo_fwd - toLoadHub_FwdCargo) / 1000, toLoadHub.cargo_fwd / 1000))
+            imgui.Spacing()
+            imgui.SameLine(50)
+            imgui.TextUnformatted(string.format("AFT %.2f T / %.2f T unloaded", (toLoadHub.cargo_aft - toLoadHub_AftCargo) / 1000, toLoadHub.cargo_aft / 1000))
+            imgui.PopStyleColor()
+        elseif toLoadHub_FwdCargo + toLoadHub_AftCargo == 0 and toLoadHub.phases.is_cargo_deboarded then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
+            imgui.TextUnformatted("Cargo unloaded")
+            imgui.PopStyleColor()
+        else
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
+            imgui.TextUnformatted(string.format("No cargo to unload"))
+            imgui.PopStyleColor()
+        end
         if imgui.Button("Pause Deboarding") then
             toLoadHub.phases.is_deboarding_pause = true
         end
@@ -590,8 +667,12 @@ function viewToLoadHubWindow()
      -- Deboarding Phase Pause
     if toLoadHub.phases.is_deboarding and toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
-        imgui.TextUnformatted(string.format("Remaining passengers to deboard: %s / %s", toLoadHub.pax_count-math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
-        imgui.TextUnformatted(string.format("Remaining cargo to unload: %.1f T / %.1f T", (toLoadHub_FwdCargo + toLoadHub_AftCargo) / 1000, toLoadHub.cargo / 1000))
+        if toLoadHub_NoPax > 0 then
+            imgui.TextUnformatted(string.format("Remaining passengers to deboard: %s / %s", toLoadHub_NoPax, toLoadHub.pax_count))
+        end
+        if toLoadHub_FwdCargo + toLoadHub_AftCargo > 0 then
+            imgui.TextUnformatted(string.format("Remaining cargo to unload: %.2f T / %.2f T", (toLoadHub_FwdCargo + toLoadHub_AftCargo) / 1000, toLoadHub.cargo / 1000))
+        end
         imgui.PopStyleColor()
         if imgui.Button("Resume Deboarding") then
             toLoadHub.phases.is_deboarding_pause = false
@@ -609,6 +690,7 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
         imgui.Spacing()
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
+        imgui.PopStyleColor()
 
         if imgui.Button("Flight completed! Reset") then
             resetAirplaneParameters()
@@ -616,9 +698,9 @@ function viewToLoadHubWindow()
     end
 
     -- Time Selector for passengers
-    if toLoadHub.pax_count >0 and
-       not toLoadHub.phases.is_onboarded and (not toLoadHub.phases.is_onboarding or toLoadHub.phases.is_onboarding_pause) and
-       not toLoadHub.phases.is_deboarded and (not toLoadHub.phases.is_deboarding or toLoadHub.phases.is_deboarding_pause) then
+    if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and
+       ((not toLoadHub.phases.is_onboarded and (not toLoadHub.phases.is_onboarding or toLoadHub.phases.is_onboarding_pause)) or
+       (toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarded and (not toLoadHub.phases.is_deboarding or toLoadHub.phases.is_deboarding_pause))) then
         local generalSpeed = 3
         if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) and (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF43B54B)
@@ -630,8 +712,10 @@ function viewToLoadHubWindow()
             local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
             local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
             if toLoadHub.settings.general.simulate_cargo then
-                fastModeMinutes = fastModeMinutes + math.floor((toLoadHub.cargo * toLoadHub.cargo_speeds[2] * 0.7) / 60 + 0.3)
-                realModeMinutes = realModeMinutes + math.floor((toLoadHub.cargo * toLoadHub.cargo_speeds[3] * 0.7) / 60 + 0.3)
+                local fastModeCargoMinutes = math.floor(((toLoadHub.cargo * toLoadHub.cargo_speeds[2] * 0.7) / toLoadHub.kgPerUnit) / 60 + 0.3)
+                local realModeCargoMinutes = math.floor(((toLoadHub.cargo * toLoadHub.cargo_speeds[3] * 0.7) / toLoadHub.kgPerUnit) / 60 + 0.3)
+                fastModeMinutes = calculateTimeWithCargo(fastModeMinutes, fastModeCargoMinutes)
+                realModeMinutes = calculateTimeWithCargo(realModeMinutes, realModeCargoMinutes) 
             end
             local labelFast = fastModeMinutes < 1
                 and "Fast (less than a minute)"
@@ -643,19 +727,19 @@ function viewToLoadHubWindow()
             if imgui.RadioButton("Instant", toLoadHub.boarding_speed == 0) then
                 toLoadHub.boarding_speed = 0
                 toLoadHub.boarding_secnds_per_pax = 0
-                toLoadHub.boarding_secnds_per_10kg = toLoadHub.cargo_speeds[1]
+                toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[1]
             end
 
             if imgui.RadioButton(labelFast, toLoadHub.boarding_speed == 1) then
                 toLoadHub.boarding_speed = 1
                 toLoadHub.boarding_secnds_per_pax = generalSpeed
-                toLoadHub.boarding_secnds_per_10kg = toLoadHub.cargo_speeds[2]
+                toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[2]
             end
 
             if imgui.RadioButton(labelReal, toLoadHub.boarding_speed == 2) then
                 toLoadHub.boarding_speed = 2
                 toLoadHub.boarding_secnds_per_pax = generalSpeed * 2
-                toLoadHub.boarding_secnds_per_10kg = toLoadHub.cargo_speeds[3]
+                toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[3]
             end
         end
     end
@@ -779,7 +863,7 @@ end
 -- == Main Loop Often (1 Sec) ==
 function toloadHubMainLoop()
     -- All sounds played and airplane debooarded
-    if toLoadHub.boarding_sound_played and toLoadHub.boarding_cargo_sound_played and
+    if not toLoadHub.what_to_speak and toLoadHub.full_deboard_sound and toLoadHub.boarding_sound_played and toLoadHub.boarding_cargo_sound_played and
        toLoadHub.deboarding_sound_played and toLoadHub.deboarding_cargo_sound_played and toLoadHub.phases.is_deboarded then
         return
     end
@@ -812,7 +896,7 @@ function toloadHubMainLoop()
     end
 
     -- Loading and Starting Cargo
-    if not toLoadHub.phases.is_cargo_started and isNoPaxInRangeForCargo() then
+    if not toLoadHub.phases.is_cargo_started and toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and isNoPaxInRangeForCargo() then
         divideCargoFwdAft()
         toLoadHub.phases.is_cargo_started = true
     end
@@ -824,7 +908,7 @@ function toloadHubMainLoop()
                 applyChange = true
             else
                 if addingCargoFwdAft() then applyChange = true end
-                toLoadHub.next_cargo_check = now + toLoadHub.boarding_secnds_per_10kg + math.random(-2, 2)
+                toLoadHub.next_cargo_check = now + toLoadHub.boarding_secnds_per_cargo_unit + math.random(-2, 2)
             end
         end
 
@@ -861,7 +945,7 @@ function toloadHubMainLoop()
                 applyChange = true
             else
                 if removingCargoFwdAft() then applyChange = true end
-                toLoadHub.next_cargo_check = now + toLoadHub.boarding_secnds_per_10kg + math.random(-2, 2)
+                toLoadHub.next_cargo_check = now + toLoadHub.boarding_secnds_per_cargo_unit + math.random(-2, 2)
             end
         end
 
@@ -872,20 +956,33 @@ function toloadHubMainLoop()
     end
 
     -- Play sound if not played yet and they should be
-    if toLoadHub_NoPax >= toLoadHub.pax_count and not toLoadHub.boarding_sound_played and toLoadHub.phases.is_onboarding then playChimeSound() end
-    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and not toLoadHub.boarding_cargo_sound_played and toLoadHub.phases.is_onboarding then playCargoSound() end
-    if toLoadHub_NoPax == 0 and not toLoadHub.deboarding_sound_played and toLoadHub.phases.is_deboarding then playChimeSound() end
-    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and not toLoadHub.deboarding_cargo_sound_played and toLoadHub.phases.is_deboarding then playCargoSound() end
+    if toLoadHub_NoPax >= toLoadHub.pax_count and not toLoadHub.boarding_sound_played and toLoadHub.phases.is_pax_onboarded then playChimeSound() end
+    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and not toLoadHub.boarding_cargo_sound_played and toLoadHub.phases.is_cargo_onboarded then playCargoSound() end
+    if toLoadHub_NoPax <= 0 and not toLoadHub.deboarding_sound_played and toLoadHub.phases.is_pax_deboarded then playChimeSound() end
+    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and not toLoadHub.deboarding_cargo_sound_played and toLoadHub.phases.is_cargo_deboarded then playCargoSound() end
+    if toLoadHub_NoPax <= 0 and not toLoadHub.full_deboard_sound and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarded then playFinalSound() end
 
     -- Applying change if needed
     if applyChange then command_once("AirbusFBW/SetWeightAndCG") end
 
     -- Compliting the Onboarding process (Cargo + Passengers)
+    if toLoadHub_NoPax >= toLoadHub.pax_count and toLoadHub.phases.is_onboarding then
+        toLoadHub.phases.is_pax_onboarded = true
+    end
+    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and toLoadHub.phases.is_onboarding then
+        toLoadHub.phases.is_cargo_onboarded = true
+    end
     if toLoadHub_NoPax >= toLoadHub.pax_count and (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_onboarded = true
     end
 
     -- Compliting the Deboarding process (Cargo + Passengers)
+    if toLoadHub_NoPax <= 0 and toLoadHub.phases.is_deboarding then
+        toLoadHub.phases.is_pax_deboarded = true
+    end
+    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
+        toLoadHub.phases.is_cargo_deboarded = true
+    end
     if toLoadHub_NoPax <= 0 and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
         toLoadHub.phases.is_deboarded = true
     end
