@@ -20,7 +20,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.0.0",
+    version = "0.1.0",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -399,12 +399,13 @@ local function removingCargoFwdAft()
 end
 
 local function formatRowLoadSheet(label, value)
-    return label .. string.rep(".", 16 - #label - #tostring(value)) .. tostring(value)
+    return label .. string.rep(".", 20 - #label - #tostring(value)) .. tostring(value)
 end
 
 local function sendLoadsheetToToliss()
     -- ZWF Applied = toliss_airbus/iscsinterface/zfw
     -- ZWFCG Applied = toliss_airbus/iscsinterface/zfwCG
+    -- FUEL FOB = AirbusFBW/WriteFOB
     -- FUEL Block TO apply = toliss_airbus/iscsinterface/setNewBlockFuel
     debug(string.format("[%s] Starting Loadsheet composition.", toLoadHub.title))
 
@@ -414,22 +415,23 @@ local function sendLoadsheetToToliss()
     end
     local flt_no = dataref_table("toliss_airbus/init/flight_no")
 
-    local zfw = dataref_table("toliss_airbus/iscsinterface/blockZfw")
-    local zwfcg = dataref_table("toliss_airbus/iscsinterface/blockZfwCG")
+    local zfw = dataref_table("toliss_airbus/iscsinterface/zfw")
+    local zwfcg = dataref_table("toliss_airbus/iscsinterface/zfwCG")
     local gwcg = dataref_table("toliss_airbus/iscsinterface/currentCG")
-    local fuel_block = 123456
-    local loadSheetContent = "Loadsheet " .. os.date("%H:%M:%S") .. "\n" .. table.concat({
-        formatRowLoadSheet("ZFW", zfw),
-        formatRowLoadSheet("ZWFCG", zwfcg),
-        formatRowLoadSheet("GWCG", gwcg),
-        formatRowLoadSheet("F.BLK", fuel_block)
+    local fuel_block = dataref_table("AirbusFBW/WriteFOB")
+    local loadSheetContent = "/data2/123//NE/Loadsheet " .. os.date("%H:%M:%S") .. "\n" .. table.concat({
+        formatRowLoadSheet("ZFW", string.format("%.1f",zfw[0]/1000)),
+        formatRowLoadSheet("ZWFCG", string.format("%.1f",zwfcg[0])),
+        formatRowLoadSheet("GWCG", string.format("%.1f",gwcg[0])),
+        formatRowLoadSheet("F.BLK", string.format("%.1f",fuel_block[0]/1000))
     }, "\n")
+    debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(flt_no[0])))
 
     local payload = string.format("logon=%s&from=%s&to=%s&type=%s&packet=%s",
         toLoadHub.settings.hoppie.secret,
         toLoadHub.title,
-        flt_no,
-        'telex',
+        flt_no[0],
+        'cpdlc',
         loadSheetContent:gsub("\n", "%%0A")
     )
 
@@ -830,7 +832,8 @@ function viewToLoadHubWindowSettings()
 
     imgui.TextUnformatted("Secret:")
     imgui.SameLine(75)
-    changed, newval = imgui.InputText("##secret", toLoadHub.settings.hoppie.secret, 80)
+    local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
+    changed, newval = imgui.InputText("##secret", masked_secret, 80)
     if changed then toLoadHub.settings.hoppie.secret , setSave = newval, true end
     imgui.Separator()
     imgui.Spacing()
