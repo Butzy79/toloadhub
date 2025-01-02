@@ -75,10 +75,10 @@ local toLoadHub = {
         simbrief = {
             auto_fetch = true,
             randomize_passenger = true,
-            username = ""
+            username = nil
         },
         hoppie = {
-            secret = "",
+            secret = nil,
             enable_loadsheet = true
         },
         door = {
@@ -93,9 +93,11 @@ local toloadhub_window = nil
 
 local urls = {
     simbrief_fplan = "http://www.simbrief.com/api/xml.fetcher.php?username=",
+    hoppie_connect = "https://www.hoppie.nl/acars/system/connect.html"
 }
 local LIP = require("LIP")
 local http = require("socket.http")
+local ltn12 = require("ltn12")
 require("LuaXml")
 
 math.randomseed(os.time())
@@ -154,7 +156,7 @@ local function readSettingsToFile()
 end
 
 local function fetchSimbriefFPlan()
-    if toLoadHub.settings.simbrief.username == nil then
+    if toLoadHub.settings.simbrief.username == nil or not toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") then
         debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
         return false
     end
@@ -364,8 +366,49 @@ local function removingCargoFwdAft()
     return someChanges
 end
 
+local function formatRowLoadSheet(label, value)
+    return label .. string.rep(".", 16 - #label - #tostring(value)) .. tostring(value)
+end
+
 local function sendLoadsheetToToliss()
-    -- TODO: funct to write
+    -- ZWF Applied = toliss_airbus/iscsinterface/zfw
+    -- ZWFCG Applied = toliss_airbus/iscsinterface/zfwCG
+    -- FUEL Block TO apply = toliss_airbus/iscsinterface/setNewBlockFuel
+     if toLoadHub.settings.hoppie.secret == nil or not toLoadHub.settings.hoppie.secret:gsub("^%s*(.-)%s*$", "%1") then
+        debug(string.format("[%s] Hoppie secret not set.", toLoadHub.title))
+        return false
+    end
+    local flt_no = dataref_table("toliss_airbus/init/flight_no")
+
+    local zfw = dataref_table("toliss_airbus/iscsinterface/blockZfw")
+    local zwfcg = dataref_table("toliss_airbus/iscsinterface/blockZfwCG")
+    local gwcg = dataref_table("toliss_airbus/iscsinterface/currentCG")
+    local fuel_block = 123456
+    local loadSheetContent = "Loadsheet " .. os.date("%H:%M:%S") .. "\n" .. table.concat({
+        formatRowLoadSheet("ZFW", zfw),
+        formatRowLoadSheet("ZWFCG", zwfcg),
+        formatRowLoadSheet("GWCG", gwcg),
+        formatRowLoadSheet("F.BLK", fuel_block)
+    }, "\n")
+
+    local payload = string.format("logon=%s&from=%s&to=%s&type=%s&packet=%s",
+        toLoadHub.settings.hoppie.secret,
+        toLoadHub.title,
+        flt_no,
+        'telex',
+        loadSheetContent:gsub("\n", "%%0A")
+    )
+
+    local _, code = http.request{
+        url = urls.hoppie_connect,
+        method = "POST",
+        headers = {
+            ["Content-Type"] = "application/x-www-form-urlencoded",
+            ["Content-Length"] = tostring(#payload),
+        },
+        source = ltn12.source.string(payload),
+    }
+    if code == 200 then toLoadHub.loadsheet_sent = true end
 end
 
 -- == X-Plane Functions ==
@@ -861,13 +904,6 @@ dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1
 
 dataref("toLoadHub_AftCargo", "AirbusFBW/AftCargo", "writeable")
 dataref("toLoadHub_FwdCargo", "AirbusFBW/FwdCargo", "writeable")
-
-    -- ZWF = toliss_airbus/iscsinterface/blockZfw
-    -- ZWF Applied = toliss_airbus/iscsinterface/zfw
-    -- GWCG = toliss_airbus/iscsinterface/currentCG
-    -- ZWFCG = toliss_airbus/iscsinterface/blockZfwCG
-    -- ZWFCG Applied = toliss_airbus/iscsinterface/zfwCG
-    -- FUEL Block TO apply = toliss_airbus/iscsinterface/setNewBlockFuel
 
 setAirplaneNumbers()
 readSettingsToFile()
