@@ -984,6 +984,34 @@ function toloadHubMainLoop()
     if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and not toLoadHub.deboarding_cargo_sound_played and toLoadHub.phases.is_cargo_deboarded then playCargoSound() end
     if toLoadHub_NoPax <= 0 and not toLoadHub.full_deboard_sound and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarded then playFinalSound() end
 
+    -- Compliting the Onboarding process (Cargo + Passengers)
+    if toLoadHub_NoPax >= toLoadHub.pax_count and toLoadHub.phases.is_onboarding then
+        toLoadHub.phases.is_pax_onboarded = true
+        applyChange = true
+    end
+    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and toLoadHub.phases.is_onboarding then
+        toLoadHub.phases.is_cargo_onboarded = true
+        applyChange = true
+    end
+    if toLoadHub.phases.is_pax_onboarded and toLoadHub.phases.is_cargo_onboarded and toLoadHub.phases.is_onboarding then
+        toLoadHub.phases.is_onboarded = true
+        applyChange = true
+    end
+
+    -- Compliting the Deboarding process (Cargo + Passengers)
+    if toLoadHub_NoPax <= 0 and toLoadHub.phases.is_deboarding then
+        toLoadHub.phases.is_pax_deboarded = true
+        applyChange = true
+    end
+    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
+        toLoadHub.phases.is_cargo_deboarded = true
+        applyChange = true
+    end
+    if toLoadHub_NoPax <= 0 and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
+        toLoadHub.phases.is_deboarded = true
+        applyChange = true
+    end
+
     -- Applying change if needed
     if applyChange then
         toLoadHub_NoPax_XP = toLoadHub_NoPax
@@ -993,27 +1021,6 @@ function toloadHubMainLoop()
         command_once("AirbusFBW/SetWeightAndCG")
     end
 
-    -- Compliting the Onboarding process (Cargo + Passengers)
-    if toLoadHub_NoPax >= toLoadHub.pax_count and toLoadHub.phases.is_onboarding then
-        toLoadHub.phases.is_pax_onboarded = true
-    end
-    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and toLoadHub.phases.is_onboarding then
-        toLoadHub.phases.is_cargo_onboarded = true
-    end
-    if toLoadHub.phases.is_pax_onboarded and toLoadHub.phases.is_cargo_onboarded and toLoadHub.phases.is_onboarding then
-        toLoadHub.phases.is_onboarded = true
-    end
-
-    -- Compliting the Deboarding process (Cargo + Passengers)
-    if toLoadHub_NoPax <= 0 and toLoadHub.phases.is_deboarding then
-        toLoadHub.phases.is_pax_deboarded = true
-    end
-    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
-        toLoadHub.phases.is_cargo_deboarded = true
-    end
-    if toLoadHub_NoPax <= 0 and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
-        toLoadHub.phases.is_deboarded = true
-    end
 end
 
 -- == Main code ==
