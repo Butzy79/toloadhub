@@ -15,6 +15,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
     steps:
+    - uses: actions/checkout@v4.1.1
     - name: Debug event details
       run: |
         echo "Event: ${{ github.event_name }}"
@@ -25,6 +26,8 @@ jobs:
       run: |
         echo "Listing files in the repository:"
         ls -la
+        cd ../
+        ls -la
 
     - name: Create ZIP
       id: create_zip
@@ -33,7 +36,6 @@ jobs:
         ZIP_NAME="${TAG_NAME}.zip"
         # Debugging: check that files exist before zipping
         echo "Files to be zipped:"
-        ls -la
         zip -r "${ZIP_NAME}" . -x "README.md" -x "CHANGELOG.md" -x ".github/*"
         echo "Created ZIP: ${ZIP_NAME}"
         echo "::set-output name=zip_name::${ZIP_NAME}"
