@@ -38,11 +38,13 @@ local toLoadHub = {
     cargo_starting_range = {45, 60},
     cargo_speeds = {0, 3, 6},
     boarding_secnds_per_cargo_unit = 0,
+    boarding_secnds_per_fuel_unit = 0,
     kgPerUnit = 50,
+    fuelPerUnit = 100,
     first_init = false,
     phases = {
-        is_fuel_started = false,
-        is_fuel_completed = false,
+        is_refueling_started = false,
+        is_refueling_completed = false,
         is_onboarding = false,
         is_pax_onboarded = false,
         is_pax_deboarded = false,
@@ -59,6 +61,7 @@ local toLoadHub = {
     boarding_secnds_per_pax = 0,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     next_cargo_check = os.time(),
+    next_refueling_check = os.time(),
     wait_until_speak = os.time(),
     what_to_speak = nil,
     boarding_sound_played = false,
@@ -129,6 +132,14 @@ end
 local function calculateTimeWithCargo(a, b)
     local res = a / 2 + b
     return (res < a and a) or (res < b and b) or res
+end
+
+local function isWithinNine(num1, num2)
+    if math.abs(num1 - num2) <= 9 then
+        return true
+    else
+        return false
+    end
 end
 
 -- == Utility Functions ==
@@ -239,6 +250,8 @@ local function resetAirplaneParameters()
     toLoadHub_AftCargo = 0
     toLoadHub_FwdCargo = 0
     toLoadHub_PaxDistrib = 0.5
+    toLoadHub_WriteFOB = 0
+    toLoadHub_setNewBlockFuel = 0
 
     toLoadHub.pax_count = 0
     toLoadHub.cargo = 0
@@ -250,6 +263,7 @@ local function resetAirplaneParameters()
     toLoadHub.boarding_secnds_per_cargo_unit = 0
     toLoadHub.next_boarding_check = os.time()
     toLoadHub.next_cargo_check = os.time()
+    toLoadHub.next_refueling_check = os.time()
     toLoadHub.wait_until_speak = os.time()
     toLoadHub.what_to_speak = nil
     toLoadHub.boarding_sound_played = false
@@ -418,12 +432,11 @@ local function sendLoadsheetToToliss()
     local zfw = dataref_table("toliss_airbus/iscsinterface/zfw")
     local zwfcg = dataref_table("toliss_airbus/iscsinterface/zfwCG")
     local gwcg = dataref_table("toliss_airbus/iscsinterface/currentCG")
-    local fuel_block = dataref_table("AirbusFBW/WriteFOB")
     local loadSheetContent = "/data2/123//NE/Loadsheet " .. os.date("%H:%M:%S") .. "\n" .. table.concat({
         formatRowLoadSheet("ZFW", string.format("%.1f",zfw[0]/1000)),
         formatRowLoadSheet("ZWFCG", string.format("%.1f",zwfcg[0])),
         formatRowLoadSheet("GWCG", string.format("%.1f",gwcg[0])),
-        formatRowLoadSheet("F.BLK", string.format("%.1f",fuel_block[0]/1000))
+        formatRowLoadSheet("F.BLK", string.format("%.1f",toLoadHub_WriteFOB/1000))
     }, "\n")
     debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(flt_no[0])))
 
@@ -488,9 +501,15 @@ function viewToLoadHubWindow()
         end
         return
     end
+    
+    if toLoadHub.phases.is_refueling_started then
+        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+        imgui.TextUnformatted(string.format("Refueling in progress %s / %s", toLoadHub_setNewBlockFuel, toLoadHub.fuel_plan_ramp))
+        imgui.PopStyleColor()
+    end
 
     -- Starting Onboarding and Passenger/Cargo Selection
-    if not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
+    if not toLoadHub.phases.is_refueling_started and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
         local passengeraNumberChanged, newPassengerNumber = imgui.SliderInt("Passengers number", toLoadHub.pax_count, 0, toLoadHub.max_passenger, "Value: %d")
         if passengeraNumberChanged then
             toLoadHub.pax_count = newPassengerNumber
@@ -513,8 +532,17 @@ function viewToLoadHubWindow()
         if imgui.Button("Set random passenger number") then
             setRandomNumberOfPassengers()
         end
-
-        if toLoadHub.pax_count > 0 or toLoadHub.cargo > 0 then
+        if toLoadHub.fuel_plan_ramp > 0 and not toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_refueling_started 
+            and (toLoadHub_setNewBlockFuel ~=  toLoadHub.fuel_plan_ramp or not isWithinNine(toLoadHub.fuel_plan_ramp, toLoadHub_WriteFOB)) then
+            imgui.Separator()
+            imgui.Spacing()
+            if imgui.Button("Start Refueling") then
+                toLoadHub.next_refueling_check = os.time()
+                toLoadHub.phases.is_refueling_started = true
+            end
+            imgui.Spacing()
+        end
+        if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and not toLoadHub.phases.is_refueling_started then
             if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
                (toLoadHub_Doors_6 and toLoadHub_Doors_6 >1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
                 imgui.Separator()
@@ -531,7 +559,7 @@ function viewToLoadHubWindow()
                 imgui.TextUnformatted("Open the doors to start the onboarding.")
                 imgui.PopStyleColor()
             end
-        else
+        elseif toLoadHub.pax_count <= 0 or toLoadHub.cargo <= 0 then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted("Please add at least one passenger or some cargo.")
             imgui.PopStyleColor()
@@ -713,7 +741,7 @@ function viewToLoadHubWindow()
     end
 
     -- Time Selector for passengers
-    if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and
+    if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and not toLoadHub.phases.is_refueling_started and
        ((not toLoadHub.phases.is_onboarded and (not toLoadHub.phases.is_onboarding or toLoadHub.phases.is_onboarding_pause)) or
        (toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarded and (not toLoadHub.phases.is_deboarding or toLoadHub.phases.is_deboarding_pause))) then
         local generalSpeed = 3
@@ -764,7 +792,7 @@ function viewToLoadHubWindow()
     end
 
     -- Settings Menu Button
-    if not toLoadHub.visible_settings and not toLoadHub.phases.is_onboarding then
+    if not toLoadHub.visible_settings and not toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_refueling_started then
         imgui.Separator()
         imgui.Spacing()
         imgui.SameLine((toLoadHub.settings.general.window_width)-125)
@@ -897,6 +925,23 @@ function toloadHubMainLoop()
         toLoadHub.what_to_speak = nil
     end
 
+    -- Refueling Phase
+    if toLoadHub.phases.is_refueling_started then
+        if not isWithinNine(toLoadHub.fuel_plan_ramp, toLoadHub_WriteFOB) and now > toLoadHub.next_refueling_check then
+            if toLoadHub_setNewBlockFuel > toLoadHub.fuel_plan_ramp then
+                toLoadHub_setNewBlockFuel = math.max(toLoadHub_setNewBlockFuel - toLoadHub.fuelPerUnit, toLoadHub.fuel_plan_ramp)
+            else
+                toLoadHub_setNewBlockFuel = math.min(toLoadHub_setNewBlockFuel + toLoadHub.fuelPerUnit, toLoadHub.fuel_plan_ramp)
+            end
+            applyChange = true
+        end
+        if isWithinNine(toLoadHub.fuel_plan_ramp, toLoadHub_WriteFOB) then
+            toLoadHub.phases.is_refueling_started = false
+            toLoadHub.phases.is_refueling_completed = true
+        end
+        toLoadHub.next_refueling_check = now + toLoadHub.boarding_secnds_per_fuel_unit + math.random(-2, 2)
+    end
+
     -- Onboarding Phase and Finishing Onboarding
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         if toLoadHub_NoPax < toLoadHub.pax_count and now > toLoadHub.next_boarding_check then
@@ -1021,6 +1066,8 @@ dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1
 
 dataref("toLoadHub_AftCargo", "AirbusFBW/AftCargo", "writeable")
 dataref("toLoadHub_FwdCargo", "AirbusFBW/FwdCargo", "writeable")
+dataref("toLoadHub_WriteFOB", "AirbusFBW/WriteFOB", "writeable")
+dataref("toLoadHub_setNewBlockFuel", "toliss_airbus/iscsinterface/setNewBlockFuel", "writeable")
 
 
 setAirplaneNumbers()
