@@ -20,7 +20,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.8.0",
+    version = "0.9.0",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -375,6 +375,11 @@ end
 local function closeDoorsCargo()
     toLoadHub_CargoDoors_1 = 0
     toLoadHub_CargoDoors_2 = 0
+end
+
+local function openDoorsCargo()
+    toLoadHub_CargoDoors_1 = 2
+    toLoadHub_CargoDoors_2 = 2
 end
 
 local function focusOnToLoadHub()
@@ -938,6 +943,7 @@ function toloadHubMainLoop()
     -- Loading and Starting Cargo
     if not toLoadHub.phases.is_cargo_started and toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and isNoPaxInRangeForCargo() then
         divideCargoFwdAft()
+        openDoorsCargo()
         toLoadHub.phases.is_cargo_started = true
     end
     if toLoadHub.phases.is_cargo_started and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
@@ -976,6 +982,7 @@ function toloadHubMainLoop()
 
     -- Unloading and Starting Cargo Deboarding Phase
     if toLoadHub.phases.is_deboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
+        openDoorsCargo()
         if (toLoadHub_FwdCargo + toLoadHub_AftCargo) > 0 and now > toLoadHub.next_cargo_check then
             if toLoadHub.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
                 toLoadHub_FwdCargo = 0
@@ -988,7 +995,6 @@ function toloadHubMainLoop()
 
          if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 then
             focusOnToLoadHub()
-            closeDoorsCargo()
          end
     end
 
