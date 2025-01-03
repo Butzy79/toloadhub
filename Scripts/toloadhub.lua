@@ -499,6 +499,10 @@ function viewToLoadHubWindow()
         local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
         toLoadHub.settings.general.window_height = wTop - wBottom
         toLoadHub.settings.general.window_width = wRight - wLeft
+    else
+        local vrwinWidth, vrwinHeight = float_wnd_get_geometry(toloadhub_window)
+        toLoadHub.settings.general.window_height = vrwinHeight
+        toLoadHub.settings.general.window_width = vrwinWidth
     end
 
     if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
@@ -795,6 +799,10 @@ function viewToLoadHubWindowSettings()
         local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
         toLoadHub.settings.general.window_height = wTop - wBottom
         toLoadHub.settings.general.window_width = wRight - wLeft
+    else
+        local vrwinWidth, vrwinHeight = float_wnd_get_geometry(toloadhub_window)
+        toLoadHub.settings.general.window_height = vrwinHeight
+        toLoadHub.settings.general.window_width = vrwinWidth
     end
 
     imgui.SameLine((toLoadHub.settings.general.window_width/2)-75)
