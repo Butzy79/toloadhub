@@ -44,6 +44,10 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 <X-Plane 12>/Resources/plugins/FlyWithLua/
 3. Launch X-Plane 12 and enjoy managing your load with ToLoadHUB.  
 
+## Command to Set
+In the settings, under **Controllers**, you can find a new command to assign to your key/button to open/close the ToLoad HUB window.  
+The command name is `Toggle_ToLoadHub`.
+
 ## Contributing  
 Contributions are welcome! Feel free to submit pull requests or report issues to help improve the plugin.  
 
