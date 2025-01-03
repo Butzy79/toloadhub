@@ -39,13 +39,6 @@ jobs:
         echo "Created ZIP: ${ZIP_NAME}"
         echo "::set-output name=zip_name::${ZIP_NAME}"
 
-    - name: Verify ZIP file
-      run: |
-        echo "Checking if ZIP file exists:"
-        cd ../toloadhub
-        ls -la
-        ls -l "${{ github.workspace }}/${{ steps.create_zip.outputs.zip_name }}"
-
     - name: Upload ZIP to Release
       if: ${{ github.event.release.draft == false }}
       uses: actions/upload-release-asset@v1
