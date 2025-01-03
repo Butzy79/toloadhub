@@ -50,6 +50,6 @@ Contributions are welcome! Feel free to submit pull requests or report issues to
 ## License  
 This project is licensed under the [MIT License](LICENSE).  
 
----  
+---
 
 Take control of your flights with **ToLoadHUB**—your ultimate passenger and cargo management solution for ToLISS airplanes!
