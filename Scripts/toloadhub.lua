@@ -20,7 +20,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.2.0b",
+    version = "0.2.1",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -201,8 +201,8 @@ local function fetchSimbriefFPlan()
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
     end
 
-    local cargo = xml_data:find("cargo")
-    toLoadHub.cargo = tonumber(cargo[1])
+    local freight_added = xml_data:find("freight_added")
+    toLoadHub.cargo = tonumber(freight_added[1])
 
     local plan_ramp = xml_data:find("plan_ramp")
     toLoadHub.fuel_plan_ramp = tonumber(plan_ramp[1])
