@@ -424,7 +424,7 @@ local function sendLoadsheetToToliss()
         formatRowLoadSheet("ZFW", string.format("%.1f",zfw[0]/1000)),
         formatRowLoadSheet("ZWFCG", string.format("%.1f",zwfcg[0])),
         formatRowLoadSheet("GWCG", string.format("%.1f",gwcg[0])),
-        formatRowLoadSheet("F.BLK", string.format("%.1f",f_blk/1000))
+        formatRowLoadSheet("F.BLK", string.format("%.1f",f_blk[0]/1000))
     }, "\n")
     debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(flt_no[0])))
 
@@ -985,7 +985,7 @@ function toloadHubMainLoop()
     if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_cargo_onboarded = true
     end
-    if toLoadHub_NoPax >= toLoadHub.pax_count and (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and toLoadHub.phases.is_onboarding then
+    if toLoadHub.phases.is_pax_onboarded and toLoadHub.phases.is_cargo_onboarded and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_onboarded = true
     end
 
