@@ -20,7 +20,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.5.1",
+    version = "0.8.0",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -147,7 +147,7 @@ end
 -- == Utility Functions ==
 function saveSettingsToFileToLoadHub(final)
     debug(string.format("[%s] saveSettingsToFileToLoadHub(%s)", toLoadHub.title, tostring(final)))
-    if final and (toLoadHub.visible_settings or toLoadHub.visible_main) then
+    if final and (toLoadHub.visible_settings or toLoadHub.visible_main) and not float_wnd_is_vr(toloadhub_window) then
         local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
         local scrLeft, scrTop, scrRight, scrBottom = XPLMGetScreenBoundsGlobal()
         toLoadHub.settings.general.window_x = math.max(scrLeft, wLeft - scrLeft)
@@ -495,9 +495,15 @@ function closeToLoadHubWindow()
 end
 
 function viewToLoadHubWindow()
-    local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
-    toLoadHub.settings.general.window_height = wTop - wBottom
-    toLoadHub.settings.general.window_width = wRight - wLeft
+    if not float_wnd_is_vr(toloadhub_window) then
+        local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
+        toLoadHub.settings.general.window_height = wTop - wBottom
+        toLoadHub.settings.general.window_width = wRight - wLeft
+    else
+        local vrwinWidth, vrwinHeight = float_wnd_get_geometry(toloadhub_window)
+        toLoadHub.settings.general.window_height = vrwinHeight
+        toLoadHub.settings.general.window_width = vrwinWidth
+    end
 
     if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
@@ -789,9 +795,15 @@ function viewToLoadHubWindow()
 end
 
 function viewToLoadHubWindowSettings()
-    local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
-    toLoadHub.settings.general.window_height = wTop - wBottom
-    toLoadHub.settings.general.window_width = wRight - wLeft
+    if not float_wnd_is_vr(toloadhub_window) then
+        local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
+        toLoadHub.settings.general.window_height = wTop - wBottom
+        toLoadHub.settings.general.window_width = wRight - wLeft
+    else
+        local vrwinWidth, vrwinHeight = float_wnd_get_geometry(toloadhub_window)
+        toLoadHub.settings.general.window_height = vrwinHeight
+        toLoadHub.settings.general.window_width = vrwinWidth
+    end
 
     imgui.SameLine((toLoadHub.settings.general.window_width/2)-75)
     if imgui.Button("Back to ToLoad HUB", 140, 30) then
