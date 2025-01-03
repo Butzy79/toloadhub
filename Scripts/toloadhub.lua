@@ -674,7 +674,7 @@ function viewToLoadHubWindow()
         end
 
         if toLoadHub_FwdCargo + toLoadHub_AftCargo > 0 and not toLoadHub.phases.is_cargo_deboarded then
-            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted(string.format("Cargo offloading in progress:"))
             imgui.Spacing()
             imgui.SameLine(50)
