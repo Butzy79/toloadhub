@@ -20,7 +20,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.5.0",
+    version = "0.5.1",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -345,7 +345,7 @@ local function playCargoSound()
     end
     if toLoadHub.phases.is_cargo_deboarded then
         if toLoadHub.cargo > 0 then
-            toLoadHub.what_to_speak = "Cargo Unloading Completed"
+            toLoadHub.what_to_speak = "Cargo offloading Completed"
             toLoadHub.wait_until_speak = os.time() + 2
         end
         toLoadHub.deboarding_cargo_sound_played = true
@@ -669,21 +669,21 @@ function viewToLoadHubWindow()
 
         if toLoadHub_FwdCargo + toLoadHub_AftCargo > 0 and not toLoadHub.phases.is_cargo_deboarded then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
-            imgui.TextUnformatted(string.format("Cargo unloading in progress:"))
+            imgui.TextUnformatted(string.format("Cargo offloading in progress:"))
             imgui.Spacing()
             imgui.SameLine(50)
-            imgui.TextUnformatted(string.format("FWD %.2f T / %.2f T unloaded", (toLoadHub.cargo_fwd - toLoadHub_FwdCargo) / 1000, toLoadHub.cargo_fwd / 1000))
+            imgui.TextUnformatted(string.format("FWD %.2f T / %.2f T offloaded", (toLoadHub.cargo_fwd - toLoadHub_FwdCargo) / 1000, toLoadHub.cargo_fwd / 1000))
             imgui.Spacing()
             imgui.SameLine(50)
-            imgui.TextUnformatted(string.format("AFT %.2f T / %.2f T unloaded", (toLoadHub.cargo_aft - toLoadHub_AftCargo) / 1000, toLoadHub.cargo_aft / 1000))
+            imgui.TextUnformatted(string.format("AFT %.2f T / %.2f T offloaded", (toLoadHub.cargo_aft - toLoadHub_AftCargo) / 1000, toLoadHub.cargo_aft / 1000))
             imgui.PopStyleColor()
         elseif toLoadHub_FwdCargo + toLoadHub_AftCargo == 0 and toLoadHub.phases.is_cargo_deboarded then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
-            imgui.TextUnformatted("Cargo unloaded")
+            imgui.TextUnformatted("Cargo offloaded")
             imgui.PopStyleColor()
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
-            imgui.TextUnformatted(string.format("No cargo to unload"))
+            imgui.TextUnformatted(string.format("No cargo to offload"))
             imgui.PopStyleColor()
         end
         if imgui.Button("Pause Deboarding") then
@@ -698,7 +698,7 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("Remaining passengers to deboard: %s / %s", toLoadHub_NoPax, toLoadHub.pax_count))
         end
         if toLoadHub_FwdCargo + toLoadHub_AftCargo > 0 then
-            imgui.TextUnformatted(string.format("Remaining cargo to unload: %.2f T / %.2f T", (toLoadHub_FwdCargo + toLoadHub_AftCargo) / 1000, toLoadHub.cargo / 1000))
+            imgui.TextUnformatted(string.format("Remaining cargo to offload: %.2f T / %.2f T", (toLoadHub_FwdCargo + toLoadHub_AftCargo) / 1000, toLoadHub.cargo / 1000))
         end
         imgui.PopStyleColor()
         if imgui.Button("Resume Deboarding") then
@@ -713,7 +713,7 @@ function viewToLoadHubWindow()
     -- Deboarded Phase (Deboard Complete), Ready for a new flight!
     if toLoadHub.phases.is_deboarded then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF87CEFA)
-        imgui.TextUnformatted("Deboarding and cargo unloading have been completed!")
+        imgui.TextUnformatted("Deboarding and cargo offloaded have been completed!")
         imgui.PopStyleColor()
         imgui.Spacing()
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
