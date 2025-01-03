@@ -24,7 +24,13 @@ jobs:
         TAG_NAME=${{ github.ref_name }}
         ZIP_NAME="${TAG_NAME}.zip"
         zip -r "${ZIP_NAME}" . -x "README.md" -x "CHANGELOG.md"
+        echo "Created ZIP: ${ZIP_NAME}"
         echo "::set-output name=zip_name::${ZIP_NAME}"
+
+    - name: Verify ZIP file
+      run: |
+        echo "Checking if ZIP file exists:"
+        ls -l "${{ github.workspace }}/${{ steps.create_zip.outputs.zip_name }}"
 
     - name: Upload ZIP to Release
       if: ${{ github.event.release.draft == false }}
