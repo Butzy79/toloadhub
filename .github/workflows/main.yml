@@ -39,6 +39,8 @@ jobs:
     - name: Verify ZIP file
       run: |
         echo "Checking if ZIP file exists:"
+        cd ../toloadhub
+        ls -la
         ls -l "${{ github.workspace }}/${{ steps.create_zip.outputs.zip_name }}"
 
     - name: Upload ZIP to Release
@@ -46,6 +48,6 @@ jobs:
       uses: actions/upload-release-asset@v1
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ github.workspace }}/${{ steps.create_zip.outputs.zip_name }}
+        asset_path: ../${{ steps.create_zip.outputs.zip_name }}
         asset_name: ${{ steps.create_zip.outputs.zip_name }}
         asset_content_type: application/zip
