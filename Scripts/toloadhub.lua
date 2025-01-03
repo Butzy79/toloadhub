@@ -20,7 +20,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.2.3",
+    version = "0.5.0",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -56,12 +56,15 @@ local toLoadHub = {
     boarding_secnds_per_pax = 0,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     next_cargo_check = os.time(),
+    loadsheet_check = os.time(),
     wait_until_speak = os.time(),
+    setWeightTime = os.time(),
     what_to_speak = nil,
     boarding_sound_played = false,
     deboarding_sound_played = false,
     boarding_cargo_sound_played = false,
     deboarding_cargo_sound_played = false,
+    setWeightCommand = false,
     full_deboard_sound = false,
     loadsheet_sent = false,
     settings = {
@@ -101,6 +104,7 @@ local urls = {
 local LIP = require("LIP")
 local http = require("socket.http")
 local ltn12 = require("ltn12")
+local socket = require("socket")
 
 local toLoadHub_NoPax = 0
 local toLoadHub_AftCargo = 0
@@ -260,6 +264,8 @@ local function resetAirplaneParameters()
     toLoadHub.next_boarding_check = os.time()
     toLoadHub.next_cargo_check = os.time()
     toLoadHub.wait_until_speak = os.time()
+    toLoadHub.loadsheet_check = os.time()
+    toLoadHub.setWeightTime = os.time()
     toLoadHub.what_to_speak = nil
     toLoadHub.boarding_sound_played = false
     toLoadHub.deboarding_sound_played = false
@@ -267,6 +273,7 @@ local function resetAirplaneParameters()
     toLoadHub.deboarding_cargo_sound_played = false
     toLoadHub.full_deboard_sound = false
     toLoadHub.loadsheet_sent = false
+    toLoadHub.setWeightCommand = false
     for key in pairs(toLoadHub.phases) do
         toLoadHub.phases[key] = false
     end
@@ -280,6 +287,12 @@ local function resetAirplaneParameters()
     toLoadHub_PaxDistrib_XP = 0.5
     command_once("AirbusFBW/SetWeightAndCG")
     debug(string.format("[%s] Reset parameters done", toLoadHub.title))
+end
+
+local function registerSetWeight()
+    if toLoadHub.setWeightCommand and toLoadHub.setWeightTime > os.time() then return end
+    command_once("AirbusFBW/SetWeightAndCG")
+    toLoadHub.setWeightCommand = false
 end
 
 local function setRandomNumberOfPassengers()
@@ -416,6 +429,8 @@ local function formatRowLoadSheet(label, value)
 end
 
 local function sendLoadsheetToToliss()
+    if toLoadHub.loadsheet_check > os.time() then return end
+
     debug(string.format("[%s] Starting Loadsheet composition.", toLoadHub.title))
 
     if toLoadHub.settings.hoppie.secret == nil or not toLoadHub.settings.hoppie.secret:gsub("^%s*(.-)%s*$", "%1") then
@@ -424,16 +439,11 @@ local function sendLoadsheetToToliss()
     end
     local flt_no = dataref_table("toliss_airbus/init/flight_no")
 
-    local zfw = dataref_table("toliss_airbus/iscsinterface/zfw")
-    local zwfcg = dataref_table("toliss_airbus/iscsinterface/zfwCG")
-    local gwcg = dataref_table("toliss_airbus/iscsinterface/currentCG")
-    local f_blk = dataref_table("AirbusFBW/WriteFOB")
-
     local loadSheetContent = "/data2/123//NE/Loadsheet " .. os.date("%H:%M:%S") .. "\n" .. table.concat({
-        formatRowLoadSheet("ZFW", string.format("%.1f",zfw[0]/1000)),
-        formatRowLoadSheet("ZWFCG", string.format("%.1f",zwfcg[0])),
-        formatRowLoadSheet("GWCG", string.format("%.1f",gwcg[0])),
-        formatRowLoadSheet("F.BLK", string.format("%.1f",f_blk[0]/1000))
+        formatRowLoadSheet("ZFW", string.format("%.1f",toLoadHub_zfw/1000)),
+        formatRowLoadSheet("ZFWCG", string.format("%.1f",toLoadHub_zfwCG)),
+        formatRowLoadSheet("GWCG", string.format("%.1f",toLoadHub_currentCG)),
+        formatRowLoadSheet("F.BLK", string.format("%.1f",toLoadHub_WriteFOB/1000))
     }, "\n")
     debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(flt_no[0])))
 
@@ -533,7 +543,7 @@ function viewToLoadHubWindow()
                 end
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-                imgui.TextUnformatted("Open the doors to start the onboarding.")
+                imgui.TextUnformatted("Open the doors to start the boarding.")
                 imgui.PopStyleColor()
             end
         elseif toLoadHub.pax_count <= 0 or toLoadHub.cargo <= 0 then
@@ -551,11 +561,11 @@ function viewToLoadHubWindow()
             imgui.PopStyleColor()
         elseif toLoadHub.pax_count > 0 and toLoadHub.phases.is_pax_onboarded then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
-            imgui.TextUnformatted(string.format("Passenger onboarded %s", toLoadHub_NoPax))
+            imgui.TextUnformatted(string.format("Passenger boarded %s", toLoadHub_NoPax))
             imgui.PopStyleColor()
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
-            imgui.TextUnformatted(string.format("No passenger to onboard"))
+            imgui.TextUnformatted(string.format("No passenger to board"))
             imgui.PopStyleColor()
         end
         if toLoadHub.cargo > 0 and not toLoadHub.phases.is_cargo_onboarded then
@@ -616,16 +626,13 @@ function viewToLoadHubWindow()
         imgui.Spacing()
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
         if toLoadHub.pax_count > 0 then
-            imgui.TextUnformatted(string.format("Passenger onboarded %s", toLoadHub_NoPax))
+            imgui.TextUnformatted(string.format("Passenger boarded %s", toLoadHub_NoPax))
         end
         if toLoadHub.cargo > 0 then
             imgui.TextUnformatted(string.format("Cargo loaded %.2f T", (toLoadHub_AftCargo + toLoadHub_FwdCargo) / 1000 ))
         end
         imgui.PopStyleColor()
 
-        if not toLoadHub.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet then
-            sendLoadsheetToToliss()
-        end
         if (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
            (toLoadHub_Doors_6 and toLoadHub_Doors_6 >1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
             if imgui.Button("Start Deboarding") then
@@ -904,7 +911,6 @@ function toloadHubMainLoop()
         if toLoadHub_NoPax < toLoadHub.pax_count and now > toLoadHub.next_boarding_check then
             if toLoadHub.boarding_speed == 0 then
                 toLoadHub_NoPax = toLoadHub.pax_count
-                applyChange = true
             else
                 toLoadHub_NoPax = toLoadHub_NoPax + 1
                 applyChange = true
@@ -927,7 +933,6 @@ function toloadHubMainLoop()
             if toLoadHub.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
                 toLoadHub_FwdCargo = toLoadHub.cargo_fwd
                 toLoadHub_AftCargo = toLoadHub.cargo_aft
-                applyChange = true
             else
                 if addingCargoFwdAft() then applyChange = true end
                 toLoadHub.next_cargo_check = now + toLoadHub.boarding_secnds_per_cargo_unit + math.random(-2, 2)
@@ -945,7 +950,6 @@ function toloadHubMainLoop()
         if toLoadHub_NoPax > 0 and now > toLoadHub.next_boarding_check then
              if toLoadHub.boarding_speed == 0 then
                 toLoadHub_NoPax = 0
-                applyChange = true
             else
                 toLoadHub_NoPax = toLoadHub_NoPax - 1
                 applyChange = true
@@ -964,7 +968,6 @@ function toloadHubMainLoop()
             if toLoadHub.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
                 toLoadHub_FwdCargo = 0
                 toLoadHub_AftCargo = 0
-                applyChange = true
             else
                 if removingCargoFwdAft() then applyChange = true end
                 toLoadHub.next_cargo_check = now + toLoadHub.boarding_secnds_per_cargo_unit + math.random(-2, 2)
@@ -985,29 +988,30 @@ function toloadHubMainLoop()
     if toLoadHub_NoPax <= 0 and not toLoadHub.full_deboard_sound and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarded then playFinalSound() end
 
     -- Compliting the Onboarding process (Cargo + Passengers)
-    if toLoadHub_NoPax >= toLoadHub.pax_count and toLoadHub.phases.is_onboarding then
+    if not toLoadHub.phases.is_pax_onboarded and toLoadHub_NoPax >= toLoadHub.pax_count and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_pax_onboarded = true
         applyChange = true
     end
-    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and toLoadHub.phases.is_onboarding then
+    if not toLoadHub.phases.is_cargo_onboarded and (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_cargo_onboarded = true
         applyChange = true
     end
-    if toLoadHub.phases.is_pax_onboarded and toLoadHub.phases.is_cargo_onboarded and toLoadHub.phases.is_onboarding then
+    if not toLoadHub.phases.is_onboarded and toLoadHub.phases.is_pax_onboarded and toLoadHub.phases.is_cargo_onboarded and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_onboarded = true
         applyChange = true
+        toLoadHub.loadsheet_check = os.time() + 5
     end
 
     -- Compliting the Deboarding process (Cargo + Passengers)
-    if toLoadHub_NoPax <= 0 and toLoadHub.phases.is_deboarding then
+    if not toLoadHub.phases.is_pax_deboarded and toLoadHub_NoPax <= 0 and toLoadHub.phases.is_deboarding then
         toLoadHub.phases.is_pax_deboarded = true
         applyChange = true
     end
-    if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
+    if not toLoadHub.phases.is_cargo_deboarded and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
         toLoadHub.phases.is_cargo_deboarded = true
         applyChange = true
     end
-    if toLoadHub_NoPax <= 0 and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
+    if not toLoadHub.phases.is_deboarded and toLoadHub_NoPax <= 0 and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarding then
         toLoadHub.phases.is_deboarded = true
         applyChange = true
     end
@@ -1018,9 +1022,14 @@ function toloadHubMainLoop()
         toLoadHub_PaxDistrib_XP = toLoadHub_PaxDistrib
         toLoadHub_FwdCargo_XP = toLoadHub_FwdCargo
         toLoadHub_AftCargo_XP = toLoadHub_AftCargo
-        command_once("AirbusFBW/SetWeightAndCG")
+        toLoadHub.setWeightCommand = true
+        toLoadHub.setWeightTime = os.time() + 2
     end
 
+    if not toLoadHub.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.phases.is_onboarded then
+        sendLoadsheetToToliss()
+    end
+    registerSetWeight()
 end
 
 -- == Main code ==
@@ -1036,6 +1045,11 @@ dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1
 
 dataref("toLoadHub_AftCargo_XP", "AirbusFBW/AftCargo", "writeable")
 dataref("toLoadHub_FwdCargo_XP", "AirbusFBW/FwdCargo", "writeable")
+
+dataref("toLoadHub_zfw", "toliss_airbus/iscsinterface/zfw", "readonly")
+dataref("toLoadHub_zfwCG", "toliss_airbus/iscsinterface/zfwCG", "readonly")
+dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonly")
+dataref("toLoadHub_WriteFOB", "AirbusFBW/WriteFOB", "readonly")
 
 setAirplaneNumbers()
 readSettingsToFile()
