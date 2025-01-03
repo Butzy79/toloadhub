@@ -515,7 +515,8 @@ function viewToLoadHubWindow()
         end
 
         if toLoadHub.pax_count > 0 or toLoadHub.cargo > 0 then
-            if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) then
+            if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
+               (toLoadHub_Doors_6 and toLoadHub_Doors_6 >1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
                 imgui.Separator()
                 imgui.Spacing()
 
@@ -620,11 +621,17 @@ function viewToLoadHubWindow()
         if not toLoadHub.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet then
             sendLoadsheetToToliss()
         end
-
-        if imgui.Button("Start Deboarding") then
-            toLoadHub.phases.is_deboarding = true
-            toLoadHub.next_boarding_check = os.time()
-            toLoadHub.next_cargo_check = os.time()
+        if (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
+           (toLoadHub_Doors_6 and toLoadHub_Doors_6 >1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
+            if imgui.Button("Start Deboarding") then
+                toLoadHub.phases.is_deboarding = true
+                toLoadHub.next_boarding_check = os.time()
+                toLoadHub.next_cargo_check = os.time()
+            end
+        else
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+            imgui.TextUnformatted("Open the doors to start the deboarding.")
+            imgui.PopStyleColor()
         end
         imgui.SameLine(200)
         if imgui.Button("Reset") then
@@ -710,13 +717,17 @@ function viewToLoadHubWindow()
        ((not toLoadHub.phases.is_onboarded and (not toLoadHub.phases.is_onboarding or toLoadHub.phases.is_onboarding_pause)) or
        (toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarded and (not toLoadHub.phases.is_deboarding or toLoadHub.phases.is_deboarding_pause))) then
         local generalSpeed = 3
-        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) and (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) then
+
+        if (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) and ((toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
+           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339"))) then       
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF43B54B)
             imgui.TextUnformatted("Both doors are open and in use.")
             imgui.PopStyleColor()
             generalSpeed = 2
         end
-        if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) then
+
+        if (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
+           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
             local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
             local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
             if toLoadHub.settings.general.simulate_cargo then
@@ -1010,6 +1021,7 @@ dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1
 
 dataref("toLoadHub_AftCargo", "AirbusFBW/AftCargo", "writeable")
 dataref("toLoadHub_FwdCargo", "AirbusFBW/FwdCargo", "writeable")
+
 
 setAirplaneNumbers()
 readSettingsToFile()
