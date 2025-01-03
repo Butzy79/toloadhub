@@ -32,6 +32,7 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 ### Hoppie Settings  
 - **Secret**: The password or secret received during registration at [hoppie.nl](https://www.hoppie.nl).  
 - **Enable Loadsheet**: Activates the sending of the loadsheet for display in the MCDU.  
+  - The loadsheet is also visible in the **ATC MENU** under **MSG RECORD**.
 
 ### Door Settings  
 - **Close Doors after Boarding**: Automatically closes doors after boarding is completed.  
