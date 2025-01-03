@@ -34,7 +34,7 @@ jobs:
         ZIP_NAME="${TAG_NAME}.zip"
         # Debugging: check that files exist before zipping
         echo "Files to be zipped:"
-        zip -r "${ZIP_NAME}" . -x "README.md" -x "CHANGELOG.md" -x ".github/*"
+        zip -r "${ZIP_NAME}" . -x "README.md" -x "CHANGELOG.md" -x ".github/*" -x ".git/*"
         echo "Created ZIP: ${ZIP_NAME}"
         echo "zip_name=${ZIP_NAME}" >> $GITHUB_OUTPUT
 
