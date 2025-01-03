@@ -36,6 +36,7 @@ jobs:
         echo "Files to be zipped:"
         zip -r "${ZIP_NAME}" . -x "README.md" -x "CHANGELOG.md" -x ".github/*"
         echo "Created ZIP: ${ZIP_NAME}"
+        echo "zip_name=${ZIP_NAME}" >> $GITHUB_OUTPUT
 
     - name: Upload ZIP to Release
       if: ${{ github.event.release.draft == false }}
