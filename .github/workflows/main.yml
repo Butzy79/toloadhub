@@ -19,6 +19,7 @@ jobs:
         zip -r "${TAG_NAME}.zip" . -x "README.md" -x "CHANGELOG.md"
 
     - name: Upload ZIP to Release
+      if: ${{ github.event.release.draft == false }}  # Solo se la release è pubblicata
       uses: actions/upload-release-asset@v1
       with:
         upload_url: ${{ github.event.release.upload_url }}
