@@ -101,6 +101,11 @@ local urls = {
 local LIP = require("LIP")
 local http = require("socket.http")
 local ltn12 = require("ltn12")
+
+local toLoadHub_NoPax = 0
+local toLoadHub_AftCargo = 0
+local toLoadHub_FwdCargo = 0
+local toLoadHub_PaxDistrib = 0.5
 require("LuaXml")
 
 math.randomseed(os.time())
@@ -269,6 +274,10 @@ local function resetAirplaneParameters()
         fetchSimbriefFPlan()
     end
     toLoadHub.first_init = true
+    toLoadHub_NoPax_XP = 0
+    toLoadHub_AftCargo_XP = 0
+    toLoadHub_FwdCargo_XP = 0
+    toLoadHub_PaxDistrib_XP = 0.5
     command_once("AirbusFBW/SetWeightAndCG")
     debug(string.format("[%s] Reset parameters done", toLoadHub.title))
 end
@@ -976,7 +985,13 @@ function toloadHubMainLoop()
     if toLoadHub_NoPax <= 0 and not toLoadHub.full_deboard_sound and (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 and toLoadHub.phases.is_deboarded then playFinalSound() end
 
     -- Applying change if needed
-    if applyChange then command_once("AirbusFBW/SetWeightAndCG") end
+    if applyChange then
+        toLoadHub_NoPax_XP = toLoadHub_NoPax
+        toLoadHub_PaxDistrib_XP = toLoadHub_PaxDistrib
+        toLoadHub_FwdCargo_XP = toLoadHub_FwdCargo
+        toLoadHub_AftCargo_XP = toLoadHub_AftCargo
+        command_once("AirbusFBW/SetWeightAndCG")
+    end
 
     -- Compliting the Onboarding process (Cargo + Passengers)
     if toLoadHub_NoPax >= toLoadHub.pax_count and toLoadHub.phases.is_onboarding then
@@ -1003,8 +1018,8 @@ end
 
 -- == Main code ==
 debug(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
-dataref("toLoadHub_NoPax", "AirbusFBW/NoPax", "writeable")
-dataref("toLoadHub_PaxDistrib", "AirbusFBW/PaxDistrib", "writeable")
+dataref("toLoadHub_NoPax_XP", "AirbusFBW/NoPax", "writeable")
+dataref("toLoadHub_PaxDistrib_XP", "AirbusFBW/PaxDistrib", "writeable")
 dataref("toLoadHub_Doors_1", "AirbusFBW/PaxDoorModeArray", "writeable", 0)
 dataref("toLoadHub_Doors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 2)
 dataref("toLoadHub_Doors_6", "AirbusFBW/PaxDoorModeArray", "writeable", 6)
@@ -1012,8 +1027,8 @@ dataref("toLoadHub_Doors_6", "AirbusFBW/PaxDoorModeArray", "writeable", 6)
 dataref("toLoadHub_CargoDoors_1", "AirbusFBW/CargoDoorModeArray", "writeable", 0)
 dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1)
 
-dataref("toLoadHub_AftCargo", "AirbusFBW/AftCargo", "writeable")
-dataref("toLoadHub_FwdCargo", "AirbusFBW/FwdCargo", "writeable")
+dataref("toLoadHub_AftCargo_XP", "AirbusFBW/AftCargo", "writeable")
+dataref("toLoadHub_FwdCargo_XP", "AirbusFBW/FwdCargo", "writeable")
 
 setAirplaneNumbers()
 readSettingsToFile()
