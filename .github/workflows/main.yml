@@ -18,11 +18,19 @@ jobs:
         echo "Release: ${{ github.event.release.name }}"
         echo "Tag: ${{ github.event.release.tag_name }}"
 
+    - name: List files before creating ZIP
+      run: |
+        echo "Listing files in the repository:"
+        ls -la
+
     - name: Create ZIP
       id: create_zip
       run: |
         TAG_NAME=${{ github.ref_name }}
         ZIP_NAME="${TAG_NAME}.zip"
+        # Debugging: check that files exist before zipping
+        echo "Files to be zipped:"
+        ls -la
         zip -r "${ZIP_NAME}" . -x "README.md" -x "CHANGELOG.md"
         echo "Created ZIP: ${ZIP_NAME}"
         echo "::set-output name=zip_name::${ZIP_NAME}"
