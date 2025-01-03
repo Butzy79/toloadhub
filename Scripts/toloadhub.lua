@@ -628,12 +628,12 @@ function viewToLoadHubWindow()
                 toLoadHub.next_boarding_check = os.time()
                 toLoadHub.next_cargo_check = os.time()
             end
+            imgui.SameLine(200)
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted("Open the doors to start the deboarding.")
             imgui.PopStyleColor()
         end
-        imgui.SameLine(200)
         if imgui.Button("Reset") then
             resetAirplaneParameters()
         end
