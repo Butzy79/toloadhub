@@ -74,7 +74,7 @@ local toLoadHub = {
     simbrief = {
         est_block = nil,
         callsign = nil,
-        fuel_plan_ramp = nil,
+        plan_ramp = nil,
         cargo = nil,
         pax_count = nil,
         est_zfw = nil,
@@ -236,7 +236,7 @@ local function fetchSimbriefFPlan()
     toLoadHub.cargo = tonumber(freight_added[1])
 
     local plan_ramp = xml_data:find("plan_ramp")
-    toLoadHub.simbrief.fuel_plan_ramp = tonumber(plan_ramp[1])
+    toLoadHub.simbrief.plan_ramp = tonumber(plan_ramp[1])
 
     local callsign = xml_data:find("callsign")
     toLoadHub.simbrief.callsign = callsign[1]
@@ -715,7 +715,7 @@ function viewToLoadHubWindow()
             imgui.SameLine(200)
         elseif toLoadHub.settings.door.open_deboarding > 0 then
             if imgui.Button("Start Deboarding (Auto Open Doors)") then
-                openDoors(true)
+                openDoors(false)
                 toLoadHub.phases.is_deboarding = true
                 toLoadHub.next_boarding_check = os.time()
                 toLoadHub.next_cargo_check = os.time()
@@ -1157,14 +1157,14 @@ function toloadHubMainLoop()
         sendLoadsheetToToliss(data_f)
     end
 
-    if (not toLoadHub.settings.hoppie.preliminary_loadsheet and ) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
+    if (not toLoadHub.settings.hoppie.preliminary_loadsheet and toLoadHub.simbrief.est_block and toLoadHub.simbrief.est_block > 420) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
         local data_p = loadsheetStructure:new()
         data_p.isFinal = false
         data_p.labelText = "Preliminary"
         data_p.zfw = string.format("%.1f", toLoadHub.simbrief.est_zfw)
         data_p.zfwcg = string.format("%.1f", 1)
         data_p.gwcg = string.format("%.1f", 1)
-        data_p.f_blk = string.format("%.1f",toLoadHub.simbrief.fuel_plan_ramp/1000)
+        data_p.f_blk = string.format("%.1f",toLoadHub.simbrief.plan_ramp/1000)
         data_p.flt_no = toLoadHub_flight_no
         sendLoadsheetToToliss(data_p)
     end
