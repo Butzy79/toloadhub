@@ -1159,7 +1159,7 @@ function toloadHubMainLoop()
         sendLoadsheetToToliss(data_f)
     end
 
-    if (not toLoadHub.settings.hoppie.preliminary_loadsheet and toLoadHub.simbrief.est_block and toLoadHub.simbrief.est_block > 420) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
+    if (not toLoadHub.settings.hoppie.preliminary_loadsheet and toLoadHub.simbrief.est_block ~=nil and toLoadHub.simbrief.est_block > 420) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~= nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
         local data_p = loadsheetStructure:new()
         data_p.isFinal = false
         data_p.labelText = "Preliminary"
