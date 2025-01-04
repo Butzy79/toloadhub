@@ -12,6 +12,8 @@
     TODO: Missing max Fuel and Cargo for A339 and A346
     License: MIT License
 --]]
+
+---@diagnostic disable: undefined-global
 local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A346 = true, A339 = true }
 if not valid_plane_icao[PLANE_ICAO] then
     XPLMSpeakString("Invalid Airplane for the ToLoad Hub Plugin")
