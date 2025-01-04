@@ -4,6 +4,7 @@
     Special thanks to: Giulio Cataldo for the night spent suffering with me
     Initial project by: @piotr-tomczyk aka @travisair
     Thanks to: @hotbso for the idea
+    Extra thanks to: @Qlaudie73 for the new features, and @Pilot4XP for the valuable information
     Description:
     A FlyWithLua plugin for X-Plane 12 to manage passengers and loadsheet for ToLISS airplanes.
     Features include automatic loading from SimBrief, random passenger generation, and real-time loading.
@@ -20,7 +21,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.9.0",
+    version = "0.10.0",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -32,7 +33,6 @@ local toLoadHub = {
     cargo = 0,
     cargo_aft = 0,
     cargo_fwd = 0,
-    fuel_plan_ramp = 0,
     pax_distribution_range = {35, 60},
     cargo_fwd_distribution_range = {55, 75},
     cargo_starting_range = {45, 60},
@@ -56,7 +56,6 @@ local toLoadHub = {
     boarding_secnds_per_pax = 0,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     next_cargo_check = os.time(),
-    loadsheet_check = os.time(),
     wait_until_speak = os.time(),
     setWeightTime = os.time(),
     what_to_speak = nil,
@@ -66,7 +65,20 @@ local toLoadHub = {
     deboarding_cargo_sound_played = false,
     setWeightCommand = false,
     full_deboard_sound = false,
-    loadsheet_sent = false,
+    hoppie = {
+        loadsheet_sent = false,
+        loadsheet_sending = false,
+        loadsheet_preliminary_sent = false,
+        loadsheet_check = os.time(),
+    },
+    simbrief = {
+        est_block = nil,
+        callsign = nil,
+        fuel_plan_ramp = nil,
+        cargo = nil,
+        pax_count = nil,
+        est_zfw = nil,
+    },
     settings = {
         general = {
             debug = false,
@@ -85,15 +97,34 @@ local toLoadHub = {
         },
         hoppie = {
             secret = "",
-            enable_loadsheet = true
+            enable_loadsheet = true,
+            preliminary_loadsheet = false
         },
         door = {
             close_boarding = true,
-            close_deboarding = true
+            close_deboarding = true,
+            open_boarding = 0,
+            open_deboarding = 0,
         }
     }
 }
 
+local loadsheetStructure = {
+    new = function(self)
+        local obj = {
+            isFinal = false,
+            labelText = "",
+            flt_no = "",
+            zfw = "",
+            zfwcg = "",
+            gwcg = "",
+            f_blk = ""
+        }
+        setmetatable(obj, self)
+        self.__index = self
+        return obj
+    end
+}
 
 local toloadhub_window = nil
 
@@ -104,7 +135,6 @@ local urls = {
 local LIP = require("LIP")
 local http = require("socket.http")
 local ltn12 = require("ltn12")
-local socket = require("socket")
 
 local toLoadHub_NoPax = 0
 local toLoadHub_AftCargo = 0
@@ -134,14 +164,6 @@ end
 local function calculateTimeWithCargo(a, b)
     local res = a / 2 + b
     return (res < a and a) or (res < b and b) or res
-end
-
-local function isWithinNine(num1, num2)
-    if math.abs(num1 - num2) <= 9 then
-        return true
-    else
-        return false
-    end
 end
 
 -- == Utility Functions ==
@@ -214,7 +236,19 @@ local function fetchSimbriefFPlan()
     toLoadHub.cargo = tonumber(freight_added[1])
 
     local plan_ramp = xml_data:find("plan_ramp")
-    toLoadHub.fuel_plan_ramp = tonumber(plan_ramp[1])
+    toLoadHub.simbrief.fuel_plan_ramp = tonumber(plan_ramp[1])
+
+    local callsign = xml_data:find("callsign")
+    toLoadHub.simbrief.callsign = callsign[1]
+
+    local est_block = xml_data:find("est_block")
+    toLoadHub.simbrief.est_block = tonumber(est_block[1])
+
+    local est_zfw = xml_data:find("est_zfw")
+    toLoadHub.simbrief.est_zfw = tonumber(est_zfw[1])
+
+    toLoadHub.simbrief.pax_count = toLoadHub.pax_count
+    toLoadHub.simbrief.cargo = toLoadHub.cargo
 
     debug(string.format("[%s] SimBrief XML downloaded and parsed.", toLoadHub.title))
 end
@@ -257,14 +291,12 @@ local function resetAirplaneParameters()
     toLoadHub.cargo = 0
     toLoadHub.cargo_aft = 0
     toLoadHub.cargo_fwd = 0
-    toLoadHub.fuel_plan_ramp = 0
     toLoadHub.boarding_speed = 0
     toLoadHub.boarding_secnds_per_pax = 0
     toLoadHub.boarding_secnds_per_cargo_unit = 0
     toLoadHub.next_boarding_check = os.time()
     toLoadHub.next_cargo_check = os.time()
     toLoadHub.wait_until_speak = os.time()
-    toLoadHub.loadsheet_check = os.time()
     toLoadHub.setWeightTime = os.time()
     toLoadHub.what_to_speak = nil
     toLoadHub.boarding_sound_played = false
@@ -272,10 +304,19 @@ local function resetAirplaneParameters()
     toLoadHub.boarding_cargo_sound_played = false
     toLoadHub.deboarding_cargo_sound_played = false
     toLoadHub.full_deboard_sound = false
-    toLoadHub.loadsheet_sent = false
+    for key in pairs(toLoadHub.hoppie) do
+        if key == "loadsheet_check" then
+            toLoadHub.phases[key] = os.time()
+        else
+            toLoadHub.phases[key] = false
+        end
+    end
     toLoadHub.setWeightCommand = false
     for key in pairs(toLoadHub.phases) do
         toLoadHub.phases[key] = false
+    end
+    for key in pairs(toLoadHub.simbrief) do
+        toLoadHub.phases[key] = nil
     end
     if not toLoadHub.first_init and toLoadHub.settings.simbrief.auto_fetch then
         fetchSimbriefFPlan()
@@ -361,6 +402,18 @@ local function playFinalSound()
     toLoadHub.full_deboard_sound = true
 end
 
+local function openDoors(boarding)
+    local setVal = boarding and toLoadHub.settings.door.open_boarding or toLoadHub.settings.door.open_deboarding
+    if setVal <= 0 then return end
+    toLoadHub_Doors_1 = 2
+    if setVal > 1 then
+        toLoadHub_Doors_2 = 2
+        if PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339" then
+            toLoadHub_Doors_6 = 2
+        end
+    end
+end
+
 local function closeDoors(boarding)
     if not toLoadHub.settings.door.close_boarding and boarding then return end
     if not toLoadHub.settings.door.close_deboarding and not boarding then return end
@@ -433,33 +486,32 @@ local function formatRowLoadSheet(label, value)
     return label .. string.rep(".", 20 - #label - #tostring(value)) .. tostring(value)
 end
 
-local function sendLoadsheetToToliss()
-    if toLoadHub.loadsheet_check > os.time() then return end
-
-    debug(string.format("[%s] Starting Loadsheet composition.", toLoadHub.title))
+local function sendLoadsheetToToliss(data)
+    if not getmetatable(data) == loadsheetStructure then return end
+    if toLoadHub.hoppie.loadsheet_check > os.time() or toLoadHub.hoppie.loadsheet_sending then return end
+    debug(string.format("[%s] Starting Loadsheet %s composition.", toLoadHub.title, data.labelText))
 
     if toLoadHub.settings.hoppie.secret == nil or not toLoadHub.settings.hoppie.secret:gsub("^%s*(.-)%s*$", "%1") then
         debug(string.format("[%s] Hoppie secret not set.", toLoadHub.title))
         return false
     end
-    local flt_no = dataref_table("toliss_airbus/init/flight_no")
+    toLoadHub.hoppie.loadsheet_sending = true
 
-    local loadSheetContent = "/data2/123//NE/Loadsheet " .. os.date("%H:%M:%S") .. "\n" .. table.concat({
-        formatRowLoadSheet("ZFW", string.format("%.1f",toLoadHub_zfw/1000)),
-        formatRowLoadSheet("ZFWCG", string.format("%.1f",toLoadHub_zfwCG)),
-        formatRowLoadSheet("GWCG", string.format("%.1f",toLoadHub_currentCG)),
-        formatRowLoadSheet("F.BLK", string.format("%.1f",toLoadHub_WriteFOB/1000))
+    local loadSheetContent = "/data2/313//NE/Loadsheet " .. data.labelText .. " " .. os.date("%H:%M:%S") .. "\n" .. table.concat({
+        formatRowLoadSheet("ZFW",  data.zfw),
+        formatRowLoadSheet("ZFWCG", data.zfwcg),
+        formatRowLoadSheet("GWCG", data.gwcg),
+        formatRowLoadSheet("F.BLK", data.f_blk),
     }, "\n")
-    debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(flt_no[0])))
+    debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(data.flt_no)))
 
     local payload = string.format("logon=%s&from=%s&to=%s&type=%s&packet=%s",
         toLoadHub.settings.hoppie.secret,
         toLoadHub.title,
-        flt_no[0],
-        'cpdlc',
+        data.flt_no,
+        'datareq', -- cpdlc
         loadSheetContent:gsub("\n", "%%0A")
     )
-
     local _, code = http.request{
         url = urls.hoppie_connect,
         method = "POST",
@@ -470,8 +522,9 @@ local function sendLoadsheetToToliss()
         source = ltn12.source.string(payload),
     }
     debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
-
-    if code == 200 then toLoadHub.loadsheet_sent = true end
+    if code == 200 and data.isFinal then toLoadHub.hoppie.loadsheet_sent = true end
+    if code == 200 and not data.isFinal then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
+    toLoadHub.hoppie.loadsheet_sending = false
 end
 
 -- == X-Plane Functions ==
@@ -547,6 +600,14 @@ function viewToLoadHubWindow()
                 imgui.Spacing()
 
                 if imgui.Button("Start Boarding") then
+                    toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
+                    toLoadHub.next_boarding_check = os.time()
+                    toLoadHub.next_cargo_check = os.time()
+                    toLoadHub.phases.is_onboarding = true
+                end
+            elseif toLoadHub.settings.door.open_boarding > 0 then
+                if imgui.Button("Start Boarding (Auto Open Doors)") then
+                    openDoors(true)
                     toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
                     toLoadHub.next_boarding_check = os.time()
                     toLoadHub.next_cargo_check = os.time()
@@ -652,6 +713,13 @@ function viewToLoadHubWindow()
                 toLoadHub.next_cargo_check = os.time()
             end
             imgui.SameLine(200)
+        elseif toLoadHub.settings.door.open_deboarding > 0 then
+            if imgui.Button("Start Deboarding (Auto Open Doors)") then
+                openDoors(true)
+                toLoadHub.phases.is_deboarding = true
+                toLoadHub.next_boarding_check = os.time()
+                toLoadHub.next_cargo_check = os.time()
+            end
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted("Open the doors to start the deboarding.")
@@ -867,6 +935,9 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Enable Loadsheet", toLoadHub.settings.hoppie.enable_loadsheet)
     if changed then toLoadHub.settings.hoppie.enable_loadsheet , setSave = newval, true end
 
+    changed, newval = imgui.Checkbox("Prelimnary Loadsheet Only for Long-haul (+7hrs)", toLoadHub.settings.hoppie.preliminary_loadsheet)
+    if changed then toLoadHub.settings.hoppie.preliminary_loadsheet , setSave = newval, true end
+
     imgui.TextUnformatted("Secret:")
     imgui.SameLine(75)
     local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
@@ -885,6 +956,36 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Close Doors after Deboarding", toLoadHub.settings.door.close_deboarding)
     if changed then toLoadHub.settings.door.close_deboarding , setSave = newval, true end
+
+    imgui.TextUnformatted("Auto Open Doors before Boarding:")
+    imgui.SameLine(275)
+    if imgui.RadioButton("No", toLoadHub.settings.door.open_boarding == 0) then
+        toLoadHub.settings.door.open_boarding = 0
+        setSave = true
+    end
+    if imgui.RadioButton("Yes, Front Door Only", toLoadHub.settings.door.open_boarding == 0) then
+        toLoadHub.settings.door.open_boarding = 1
+        setSave = true
+    end
+    if imgui.RadioButton("Yes, All Doors", toLoadHub.settings.door.open_boarding == 0) then
+        toLoadHub.settings.door.open_boarding = 2
+        setSave = true
+    end
+
+    imgui.TextUnformatted("Auto Open Doors before Deboarding:")
+    imgui.SameLine(275)
+    if imgui.RadioButton("No", toLoadHub.settings.door.open_deboarding == 0) then
+        toLoadHub.settings.door.open_deboarding = 0
+        setSave = true
+    end
+    if imgui.RadioButton("Yes, Front Door Only", toLoadHub.settings.door.open_deboarding == 0) then
+        toLoadHub.settings.door.open_deboarding = 1
+        setSave = true
+    end
+    if imgui.RadioButton("Yes, All Doors", toLoadHub.settings.door.open_deboarding == 0) then
+        toLoadHub.settings.door.open_deboarding = 2
+        setSave = true
+    end
 
     if setSave then
         saveSettingsToFileToLoadHub(false)
@@ -1017,7 +1118,7 @@ function toloadHubMainLoop()
     if not toLoadHub.phases.is_onboarded and toLoadHub.phases.is_pax_onboarded and toLoadHub.phases.is_cargo_onboarded and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_onboarded = true
         applyChange = true
-        toLoadHub.loadsheet_check = os.time() + 5
+        toLoadHub.hoppie.loadsheet_check = os.time() + 5
     end
 
     -- Compliting the Deboarding process (Cargo + Passengers)
@@ -1044,8 +1145,28 @@ function toloadHubMainLoop()
         toLoadHub.setWeightTime = os.time() + 2
     end
 
-    if not toLoadHub.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.phases.is_onboarded then
-        sendLoadsheetToToliss()
+    if not toLoadHub.hoppie.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.phases.is_onboarded then
+        local data_f = loadsheetStructure:new()
+        data_f.isFinal = true
+        data_f.labelText = "Final"
+        data_f.flt_no = toLoadHub_flight_no
+        data_f.zfw = string.format("%.1f",toLoadHub_zfw/1000)
+        data_f.zfwcg = string.format("%.1f",toLoadHub_zfwCG)
+        data_f.gwcg = string.format("%.1f",toLoadHub_currentCG)
+        data_f.f_blk = string.format("%.1f",toLoadHub_WriteFOB/1000)
+        sendLoadsheetToToliss(data_f)
+    end
+
+    if (not toLoadHub.settings.hoppie.preliminary_loadsheet and ) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
+        local data_p = loadsheetStructure:new()
+        data_p.isFinal = false
+        data_p.labelText = "Preliminary"
+        data_p.zfw = string.format("%.1f", toLoadHub.simbrief.est_zfw)
+        data_p.zfwcg = string.format("%.1f", 1)
+        data_p.gwcg = string.format("%.1f", 1)
+        data_p.f_blk = string.format("%.1f",toLoadHub.simbrief.fuel_plan_ramp/1000)
+        data_p.flt_no = toLoadHub_flight_no
+        sendLoadsheetToToliss(data_p)
     end
     registerSetWeight()
 end
@@ -1067,7 +1188,9 @@ dataref("toLoadHub_FwdCargo_XP", "AirbusFBW/FwdCargo", "writeable")
 dataref("toLoadHub_zfw", "toliss_airbus/iscsinterface/zfw", "readonly")
 dataref("toLoadHub_zfwCG", "toliss_airbus/iscsinterface/zfwCG", "readonly")
 dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonly")
+dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
 dataref("toLoadHub_WriteFOB", "AirbusFBW/WriteFOB", "readonly")
+
 
 setAirplaneNumbers()
 readSettingsToFile()
