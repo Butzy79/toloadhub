@@ -1263,8 +1263,8 @@ end
 if toLoadHub.settings.simbrief.auto_fetch then
     fetchSimbriefFPlan()
 end
-add_macro("ToLoad Hub", "loadToloadHubWindow()")
-add_macro("ToLoad Hub - Reset Window", "resetPositionToloadHubWindow()")
+add_macro("ToLoad Hub - Main Window", "loadToloadHubWindow()")
+add_macro("ToLoad Hub - Reset Window Position", "resetPositionToloadHubWindow()")
 
 create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Toggle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
 create_command("FlyWithLua/TOLOADHUB/ResetPosition_toloadhub", "Reset Position ToLoadHUB window", "resetPositionToloadHubWindow()", "", "")
