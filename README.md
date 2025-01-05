@@ -25,12 +25,10 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.  
 
 ### SimBrief Settings  
-- **Username**: Your SimBrief username.  
 - **Auto Fetch at Beginning**: Automatically fetches data from SimBrief when the plugin loads.  
 - **Randomize Passenger**: Simulates real passenger variations based on SimBrief data. For example, if SimBrief indicates 100 passengers, some may not board, or extra passengers may be simulated.  
 
 ### Hoppie Settings  
-- **Secret**: The password or secret received during registration at [hoppie.nl](https://www.hoppie.nl).  
 - **Enable Loadsheet**: Activates the sending of the loadsheet for display in the MCDU.  
   - The loadsheet is also visible in the **ATC MENU** under **MSG RECORD**.
 - **Preliminary Loadsheet Only for Long-haul (+7hrs)**: Sends a preliminary loadsheet if a valid SimBrief plan exists, the flight number matches between SimBrief and the MCDU, and this option is enabled. The preliminary loadsheet can also be sent for all flights if not enabled.  
