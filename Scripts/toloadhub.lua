@@ -23,7 +23,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.10.1",
+    version = "0.10.2",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -142,6 +142,13 @@ local toLoadHub_NoPax = 0
 local toLoadHub_AftCargo = 0
 local toLoadHub_FwdCargo = 0
 local toLoadHub_PaxDistrib = 0.5
+
+if not SUPPORTS_FLOATING_WINDOWS then
+    -- to make sure the script doesn't stop old FlyWithLua versions
+    logMsg("imgui not supported by your FlyWithLua version")
+    return
+end
+
 require("LuaXml")
 
 math.randomseed(os.time())
@@ -1035,6 +1042,19 @@ function toggleToloadHubWindow()
     loadToloadHubWindow()
 end
 
+function resetPositionToloadHubWindow()
+    toLoadHub.settings.general.window_x = 160
+    toLoadHub.settings.general.window_y = 200
+    toLoadHub.settings.general.window_width = 400
+    toLoadHub.settings.general.window_height = 250
+    if toLoadHub.visible_main or toLoadHub.visible_settings then 
+        float_wnd_set_position(toloadhub_window, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
+    else
+        loadToloadHubWindow()
+    end
+    
+end
+
 -- == Main Loop Often (1 Sec) ==
 function toloadHubMainLoop()
     -- All sounds played and airplane debooarded
@@ -1244,7 +1264,11 @@ if toLoadHub.settings.simbrief.auto_fetch then
     fetchSimbriefFPlan()
 end
 add_macro("ToLoad Hub", "loadToloadHubWindow()")
-create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
+add_macro("ToLoad Hub - Reset Window", "resetPositionToloadHubWindow()")
+
+create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Toggle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
+create_command("FlyWithLua/TOLOADHUB/ResetPosition_toloadhub", "Reset Position ToLoadHUB window", "resetPositionToloadHubWindow()", "", "")
+
 do_often("toloadHubMainLoop()")
 
 if toLoadHub.settings.general.auto_open then
