@@ -92,6 +92,7 @@ local toLoadHub = {
             auto_open = true,
             auto_init = true,
             simulate_cargo = true,
+            boarding_speed = 0,
         },
         simbrief = {
             auto_fetch = true,
@@ -314,7 +315,7 @@ local function resetAirplaneParameters()
     toLoadHub.cargo = 0
     toLoadHub.cargo_aft = 0
     toLoadHub.cargo_fwd = 0
-    toLoadHub.boarding_speed = 0
+    toLoadHub.settings.general.boarding_speed = 0
     toLoadHub.boarding_secnds_per_pax = 0
     toLoadHub.boarding_secnds_per_cargo_unit = 0
     toLoadHub.next_boarding_check = os.time()
@@ -876,20 +877,20 @@ function viewToLoadHubWindow()
                 and "Real (less than a minute)"
                 or string.format("Real (%d minute%s)", realModeMinutes, realModeMinutes > 1 and "s" or "")
 
-            if imgui.RadioButton("Instant", toLoadHub.boarding_speed == 0) then
-                toLoadHub.boarding_speed = 0
+            if imgui.RadioButton("Instant", toLoadHub.settings.general.boarding_speed == 0) then
+                toLoadHub.settings.general.boarding_speed = 0
                 toLoadHub.boarding_secnds_per_pax = 0
                 toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[1]
             end
 
-            if imgui.RadioButton(labelFast, toLoadHub.boarding_speed == 1) then
-                toLoadHub.boarding_speed = 1
+            if imgui.RadioButton(labelFast, toLoadHub.settings.general.boarding_speed == 1) then
+                toLoadHub.settings.general.boarding_speed = 1
                 toLoadHub.boarding_secnds_per_pax = generalSpeed
                 toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[2]
             end
 
-            if imgui.RadioButton(labelReal, toLoadHub.boarding_speed == 2) then
-                toLoadHub.boarding_speed = 2
+            if imgui.RadioButton(labelReal, toLoadHub.settings.general.boarding_speed == 2) then
+                toLoadHub.settings.general.boarding_speed = 2
                 toLoadHub.boarding_secnds_per_pax = generalSpeed * 2
                 toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[3]
             end
@@ -1075,7 +1076,7 @@ function toloadHubMainLoop()
     -- Onboarding Phase and Finishing Onboarding
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         if toLoadHub_NoPax < toLoadHub.pax_count and now > toLoadHub.next_boarding_check then
-            if toLoadHub.boarding_speed == 0 then
+            if toLoadHub.settings.general.boarding_speed == 0 then
                 toLoadHub_NoPax = toLoadHub.pax_count
             else
                 toLoadHub_NoPax = toLoadHub_NoPax + 1
@@ -1097,7 +1098,7 @@ function toloadHubMainLoop()
     end
     if toLoadHub.phases.is_cargo_started and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         if (toLoadHub_FwdCargo + toLoadHub_AftCargo) < toLoadHub.cargo and now > toLoadHub.next_cargo_check then
-            if toLoadHub.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
+            if toLoadHub.settings.general.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
                 toLoadHub_FwdCargo = toLoadHub.cargo_fwd
                 toLoadHub_AftCargo = toLoadHub.cargo_aft
             else
@@ -1115,7 +1116,7 @@ function toloadHubMainLoop()
     -- Deboarding Phase and Finishing Deboarding
     if toLoadHub.phases.is_deboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
         if toLoadHub_NoPax > 0 and now > toLoadHub.next_boarding_check then
-             if toLoadHub.boarding_speed == 0 then
+             if toLoadHub.settings.general.boarding_speed == 0 then
                 toLoadHub_NoPax = 0
             else
                 toLoadHub_NoPax = toLoadHub_NoPax - 1
@@ -1133,7 +1134,7 @@ function toloadHubMainLoop()
     if toLoadHub.phases.is_deboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
         openDoorsCargo()
         if (toLoadHub_FwdCargo + toLoadHub_AftCargo) > 0 and now > toLoadHub.next_cargo_check then
-            if toLoadHub.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
+            if toLoadHub.settings.general.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
                 toLoadHub_FwdCargo = 0
                 toLoadHub_AftCargo = 0
             else
