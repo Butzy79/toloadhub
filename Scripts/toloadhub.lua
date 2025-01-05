@@ -315,7 +315,6 @@ local function resetAirplaneParameters()
     toLoadHub.cargo = 0
     toLoadHub.cargo_aft = 0
     toLoadHub.cargo_fwd = 0
-    toLoadHub.settings.general.boarding_speed = 0
     toLoadHub.boarding_secnds_per_pax = 0
     toLoadHub.boarding_secnds_per_cargo_unit = 0
     toLoadHub.next_boarding_check = os.time()
