@@ -23,7 +23,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.10.0",
+    version = "0.10.1",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -32,7 +32,6 @@ local toLoadHub = {
     max_cargo_fwd = 3000,
     max_cargo_aft = 5000,
     max_fuel = 20000,
-    init_fuel = 2500,
     cargo = 0,
     cargo_aft = 0,
     cargo_fwd = 0,
@@ -69,7 +68,6 @@ local toLoadHub = {
     setWeightCommand = false,
     full_deboard_sound = false,
     hoppie = {
-        loadsheet_reset_fuel = false,
         loadsheet_sent = false,
         loadsheet_sending = false,
         loadsheet_preliminary_ready = false,
@@ -267,7 +265,6 @@ end
 
 local function setIscsTemporarySimbrief()
     toLoadHub_NoPax_XP = toLoadHub.simbrief.pax_count
-    toLoadHub_WriteFOB_XP = toLoadHub.simbrief.plan_ramp
     toLoadHub_AftCargo_XP = toLoadHub.cargo_aft
     toLoadHub_FwdCargo_XP = toLoadHub.cargo_fwd
 end
@@ -1191,15 +1188,8 @@ function toloadHubMainLoop()
         sendLoadsheetToToliss(data_f)
     end
 
-    if toLoadHub.hoppie.loadsheet_reset_fuel and toLoadHub.hoppie.loadsheet_preliminary_sent then
-        toLoadHub.hoppie.loadsheet_reset_fuel = false
-        toLoadHub_WriteFOB_XP = toLoadHub.init_fuel
-    end
-
     if (not toLoadHub.settings.hoppie.preliminary_loadsheet or toLoadHub.simbrief.est_block ~=nil and toLoadHub.simbrief.est_block/60 > 420) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~= nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
         if not toLoadHub.hoppie.loadsheet_preliminary_ready then
-            toLoadHub.init_fuel = toLoadHub_WriteFOB_XP
-            toLoadHub.hoppie.loadsheet_reset_fuel = true
             toLoadHub.hoppie.loadsheet_check = os.time() + 3
             toLoadHub.hoppie.loadsheet_preliminary_ready = true
         end
@@ -1224,7 +1214,6 @@ dataref("toLoadHub_NoPax_XP", "AirbusFBW/NoPax", "writeable")
 dataref("toLoadHub_PaxDistrib_XP", "AirbusFBW/PaxDistrib", "writeable")
 dataref("toLoadHub_AftCargo_XP", "AirbusFBW/AftCargo", "writeable")
 dataref("toLoadHub_FwdCargo_XP", "AirbusFBW/FwdCargo", "writeable")
-dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "writeable")
 
 dataref("toLoadHub_Doors_1", "AirbusFBW/PaxDoorModeArray", "writeable", 0)
 dataref("toLoadHub_Doors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 2)
@@ -1238,6 +1227,8 @@ dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonl
 dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
 dataref("toLoadHub_simBriefID", "toliss_airbus/iscsinterface/simBriefID", "readonly")
 dataref("toLoadHub_hoppieLogon", "toliss_airbus/iscsinterface/hoppieLogon", "readonly")
+dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
+
 -- temporary iscs
 dataref("toLoadHub_blockZfwCG", "toliss_airbus/iscsinterface/blockZfwCG", "readonly")
 dataref("toLoadHub_blockCG", "toliss_airbus/iscsinterface/blockCG", "readonly")
