@@ -616,7 +616,6 @@ function viewToLoadHubWindow()
         toLoadHub.settings.general.window_height = vrwinHeight
         toLoadHub.settings.general.window_width = vrwinWidth
     end
-
     if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
@@ -638,6 +637,7 @@ function viewToLoadHubWindow()
         if cargoNumberChanged then
             toLoadHub.cargo = newCargoNumber
         end
+
 
         if imgui.Button("Get from Simbrief") then
             fetchSimbriefFPlan()
@@ -1118,14 +1118,17 @@ function toloadHubMainLoop()
     -- Initial Start if JD Ground Handling
     if not toLoadHub.phases.is_ready_to_start then
         toLoadHub.phases.is_ready_to_start = true
-        toLoadHub.next_ready_to_start_check = os.time() + 10
+        toLoadHub.next_ready_to_start_check = os.time() + 30
     elseif not toLoadHub.phases.is_gh_started and not toLoadHub.phases.is_onboarding and now > toLoadHub.next_ready_to_start_check then
         toLoadHub.phases.is_gh_started = true
         if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") and toLoadHub.settings.general.simulate_jdgh then
+            toloadHub_jdexe = 0
             command_once( "jd/ghd/driveup" )
             openDoorsCargo()
             openDoorsCatering() -- after 45 sec minimum!
         end
+    elseif toLoadHub.phases.is_ready_to_start and not toLoadHub.phases.is_gh_started and now > toLoadHub.next_ready_to_start_check - 20 and toloadHub_jdexe == 0 then
+        toloadHub_jdexe = 1
     end
 
     -- Onboarding Phase and Finishing Onboarding
@@ -1162,10 +1165,10 @@ function toloadHubMainLoop()
             end
         end
 
-         if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo then
+        if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo then
             focusOnToLoadHub()
             closeDoorsCargo()
-         end
+        end
     end
 
     -- Deboarding Phase and Finishing Deboarding
@@ -1367,6 +1370,12 @@ dataref("toLoadHub_m_fuel_total", "sim/flightmodel/weight/m_fuel_total", "readon
 
 dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
 dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
+
+if XPLMFindDataRef("jd/ghd/execute") then
+    dataref("toloadHub_jdexe","jd/ghd/execute", "writeable")
+else
+    toloadHub_jdexe = 0
+end
 
 setAirplaneNumbers()
 readSettingsToFile()
