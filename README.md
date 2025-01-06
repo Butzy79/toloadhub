@@ -22,8 +22,8 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Auto Open ToLoad Hub Window**: Automatically opens the ToLoad Hub window upon simulator launch if the aircraft is compatible.  
 - **Automatically Initialize Airplane**: Automatically sets the aircraft values to zero on simulator startup.  
 - **Simulate Cargo**: If enabled, cargo loading/unloading is simulated; otherwise, it is loaded instantly.  
+- **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
 - **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.  
-
 ### SimBrief Settings  
 - **Username** (not needed for A320neo): Your SimBrief username.
 - **Auto Fetch at Beginning**: Automatically fetches data from SimBrief when the plugin loads.  
