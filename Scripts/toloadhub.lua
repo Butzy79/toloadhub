@@ -23,7 +23,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.10.2",
+    version = "0.10.3",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -55,6 +55,18 @@ local toLoadHub = {
         is_deboarding = false,
         is_deboarding_pause = false,
         is_deboarded = false,
+    },
+    focus_windows = {
+        pax_load = false,
+        pax_loaded = false,
+        cargo_load = false,
+        cargo_loaded = false,
+        pax_unload = false,
+        pax_unloaded = false,
+        cargo_unload = false,
+        cargo_unloaded = false,
+        all_unload = false,
+        all_unloaded = false
     },
     boarding_speed = 0,
     boarding_secnds_per_pax = 0,
@@ -356,6 +368,9 @@ local function resetAirplaneParameters()
     toLoadHub.setWeightCommand = false
     for key in pairs(toLoadHub.phases) do
         toLoadHub.phases[key] = false
+    end
+    for key in pairs(toLoadHub.focus_windows) do
+        toLoadHub.focus_windows[key] = false
     end
     for key in pairs(toLoadHub.simbrief) do
         toLoadHub.simbrief[key] = nil
@@ -1143,7 +1158,7 @@ function toloadHubMainLoop()
             end
         end
         if toLoadHub_NoPax >= toLoadHub.pax_count then
-            focusOnToLoadHub()
+            toLoadHub.focus_windows.pax_load = true
             closeDoors(true)
         end
     end
@@ -1166,7 +1181,7 @@ function toloadHubMainLoop()
         end
 
         if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo then
-            focusOnToLoadHub()
+            toLoadHub.focus_windows.cargo_load = true
             closeDoorsCargo()
         end
     end
@@ -1183,7 +1198,7 @@ function toloadHubMainLoop()
             end
         end
         if toLoadHub_NoPax <= 0 then
-            focusOnToLoadHub()
+            toLoadHub.focus_windows.pax_unload = true
             closeDoors(false)
         end
     end
@@ -1202,9 +1217,16 @@ function toloadHubMainLoop()
         end
 
          if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 then
-            focusOnToLoadHub()
+            toLoadHub.focus_windows.cargo_unload = true
          end
     end
+
+    -- Focus windows --
+    if toLoadHub.focus_windows.pax_load and not toLoadHub.focus_windows.pax_loaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_loaded = true end
+    if toLoadHub.focus_windows.cargo_load and not toLoadHub.focus_windows.cargo_loaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_loaded = true end
+    if toLoadHub.focus_windows.pax_unload and not toLoadHub.focus_windows.pax_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_unloaded = true end
+    if toLoadHub.focus_windows.cargo_unload and not toLoadHub.focus_windows.cargo_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_unloaded = true end
+    if toLoadHub.focus_windows.all_unload and not toLoadHub.focus_windows.all_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.all_unloaded = true end
 
     -- Play sound if not played yet and they should be
     if toLoadHub_NoPax >= toLoadHub.pax_count and not toLoadHub.boarding_sound_played and toLoadHub.phases.is_pax_onboarded then playChimeSound() end
