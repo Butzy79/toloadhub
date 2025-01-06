@@ -3,14 +3,15 @@
 All notable changes to this project will be documented in this file.  
 The format is based on [Keep a Changelog](https://keepachangelog.com/),  
 and this project adheres to [Semantic Versioning](https://semver.org/).
-## [0.10.2] - 2025-01-05
+## [0.10.2] - 2025-01-06
 ### Added
 - **Reset Window** option in the **top bar menu** under **FlyWithLua -> FlyWithLuaMacros -> ToLoadHUB** (resets the window to its original position).
 - Enabled the ability to assign a command in control settings: **FlyWithLua -> TOLOADHUB -> Reset Position ToLoadHUB Window**.
 - Default Boarding/Deboarding speed saved
+- FIrst draft for JD Ground Handling
 ### Fixed
 - Bugfix on VR view
-- Dataref for 
+- Dataref for not a320neo
 
 ## [0.10.1] - 2025-01-05
 ### Fixed

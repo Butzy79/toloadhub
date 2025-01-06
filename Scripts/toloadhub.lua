@@ -42,6 +42,8 @@ local toLoadHub = {
     kgPerUnit = 50,
     first_init = false,
     phases = {
+        is_ready_to_start = false,
+        is_gh_started = false,
         is_onboarding = false,
         is_pax_onboarded = false,
         is_pax_deboarded = false,
@@ -60,6 +62,7 @@ local toLoadHub = {
     next_cargo_check = os.time(),
     wait_until_speak = os.time(),
     setWeightTime = os.time(),
+    next_ready_to_start_check = os.time(),
     what_to_speak = nil,
     boarding_sound_played = false,
     deboarding_sound_played = false,
@@ -93,6 +96,7 @@ local toLoadHub = {
             auto_init = true,
             simulate_cargo = true,
             boarding_speed = 0,
+            simulate_jdgh = false
         },
         simbrief = {
             username = "",
@@ -335,6 +339,7 @@ local function resetAirplaneParameters()
     toLoadHub.next_cargo_check = os.time()
     toLoadHub.wait_until_speak = os.time()
     toLoadHub.setWeightTime = os.time()
+    toLoadHub.next_ready_to_start_check = os.time()
     toLoadHub.what_to_speak = nil
     toLoadHub.boarding_sound_played = false
     toLoadHub.deboarding_sound_played = false
@@ -473,6 +478,16 @@ local function openDoorsCargo()
     toLoadHub_CargoDoors_2 = 2
 end
 
+local function openDoorsCatering()
+    toLoadHub_CateringDoors_1 = 2
+    toLoadHub_CateringDoors_2 = 2
+end
+
+local function closeDoorsCatering()
+    toLoadHub_CateringDoors_1 = 0
+    toLoadHub_CateringDoors_2 = 0
+end
+
 local function focusOnToLoadHub()
     if not toLoadHub.visible_main and not toLoadHub.visible_settings then
         openToLoadHubWindow(true)
@@ -601,7 +616,6 @@ function viewToLoadHubWindow()
         toLoadHub.settings.general.window_height = vrwinHeight
         toLoadHub.settings.general.window_width = vrwinWidth
     end
-
     if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
@@ -623,6 +637,7 @@ function viewToLoadHubWindow()
         if cargoNumberChanged then
             toLoadHub.cargo = newCargoNumber
         end
+
 
         if imgui.Button("Get from Simbrief") then
             fetchSimbriefFPlan()
@@ -959,6 +974,11 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
     if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
 
+    if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") then
+        changed, newval = imgui.Checkbox("Auto Start and Stop JD Ground Hanling", toLoadHub.settings.general.simulate_jdgh)
+        if changed then toLoadHub.settings.general.simulate_jdgh , setSave = newval, true end
+    end
+
     changed, newval = imgui.Checkbox("Debug Mode", toLoadHub.settings.general.debug)
     if changed then toLoadHub.settings.general.debug , setSave = newval, true end
     imgui.Separator()
@@ -970,9 +990,8 @@ function viewToLoadHubWindowSettings()
     imgui.PopStyleColor()
 
     imgui.TextUnformatted("Username (not needed for A320neo):")
-    imgui.SameLine(75)
-    changed, newval = imgui.InputText("##Username", toLoadHub.settings.simbrief.Username, 50)
-    if changed then toLoadHub.settings.simbrief.Username , setSave = newval, true end
+    changed, newval = imgui.InputText("##username", toLoadHub.settings.simbrief.username, 50)
+    if changed then toLoadHub.settings.simbrief.username , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Auto Fetch at beginning", toLoadHub.settings.simbrief.auto_fetch)
     if changed then toLoadHub.settings.simbrief.auto_fetch , setSave = newval, true end
@@ -995,7 +1014,6 @@ function viewToLoadHubWindowSettings()
     if changed then toLoadHub.settings.hoppie.preliminary_loadsheet , setSave = newval, true end
 
     imgui.TextUnformatted("Secret (not needed for A320neo):")
-    imgui.SameLine(75)
     local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
     changed, newval = imgui.InputText("##secret", masked_secret, 80)
     if changed then toLoadHub.settings.hoppie.secret , setSave = newval, true end
@@ -1097,6 +1115,22 @@ function toloadHubMainLoop()
         toLoadHub.what_to_speak = nil
     end
 
+    -- Initial Start if JD Ground Handling
+    if not toLoadHub.phases.is_ready_to_start then
+        toLoadHub.phases.is_ready_to_start = true
+        toLoadHub.next_ready_to_start_check = os.time() + 30
+    elseif not toLoadHub.phases.is_gh_started and not toLoadHub.phases.is_onboarding and now > toLoadHub.next_ready_to_start_check then
+        toLoadHub.phases.is_gh_started = true
+        if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") and toLoadHub.settings.general.simulate_jdgh then
+            toloadHub_jdexe = 0
+            command_once( "jd/ghd/driveup" )
+            openDoorsCargo()
+            openDoorsCatering() -- after 45 sec minimum!
+        end
+    elseif toLoadHub.phases.is_ready_to_start and not toLoadHub.phases.is_gh_started and now > toLoadHub.next_ready_to_start_check - 20 and toloadHub_jdexe == 0 then
+        toloadHub_jdexe = 1
+    end
+
     -- Onboarding Phase and Finishing Onboarding
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         if toLoadHub_NoPax < toLoadHub.pax_count and now > toLoadHub.next_boarding_check then
@@ -1131,10 +1165,10 @@ function toloadHubMainLoop()
             end
         end
 
-         if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo then
+        if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo then
             focusOnToLoadHub()
             closeDoorsCargo()
-         end
+        end
     end
 
     -- Deboarding Phase and Finishing Deboarding
@@ -1191,6 +1225,10 @@ function toloadHubMainLoop()
     if not toLoadHub.phases.is_onboarded and toLoadHub.phases.is_pax_onboarded and toLoadHub.phases.is_cargo_onboarded and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_onboarded = true
         applyChange = true
+         if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") and toLoadHub.settings.general.simulate_jdgh then
+            command_once( "jd/ghd/driveavay" )
+            closeDoorsCatering()
+        end
         toLoadHub.hoppie.loadsheet_check = os.time() + 5
     end
 
@@ -1281,6 +1319,9 @@ dataref("toLoadHub_Doors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 2)
 dataref("toLoadHub_Doors_6", "AirbusFBW/PaxDoorModeArray", "writeable", 6)
 dataref("toLoadHub_CargoDoors_1", "AirbusFBW/CargoDoorModeArray", "writeable", 0)
 dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1)
+dataref("toLoadHub_CateringDoors_1", "AirbusFBW/PaxDoorModeArray", "writeable", 1)
+dataref("toLoadHub_CateringDoors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 3)
+
 
 if XPLMFindDataRef("toliss_airbus/iscsinterface/currentCG") then
     dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonly")
@@ -1330,8 +1371,11 @@ dataref("toLoadHub_m_fuel_total", "sim/flightmodel/weight/m_fuel_total", "readon
 dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
 dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
 
-
-
+if XPLMFindDataRef("jd/ghd/execute") then
+    dataref("toloadHub_jdexe","jd/ghd/execute", "writeable")
+else
+    toloadHub_jdexe = 0
+end
 
 setAirplaneNumbers()
 readSettingsToFile()
