@@ -25,10 +25,12 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.  
 
 ### SimBrief Settings  
+- **Username** (not needed for A320neo): Your SimBrief username.
 - **Auto Fetch at Beginning**: Automatically fetches data from SimBrief when the plugin loads.  
 - **Randomize Passenger**: Simulates real passenger variations based on SimBrief data. For example, if SimBrief indicates 100 passengers, some may not board, or extra passengers may be simulated.  
 
-### Hoppie Settings  
+### Hoppie Settings
+- **Secret** (not needed for A320neo): The password or secret received during registration at [hoppie.nl](https://www.hoppie.nl).
 - **Enable Loadsheet**: Activates the sending of the loadsheet for display in the MCDU.  
   - The loadsheet is also visible in the **ATC MENU** under **MSG RECORD**.
 - **Preliminary Loadsheet Only for Long-haul (+7hrs)**: Sends a preliminary loadsheet if a valid SimBrief plan exists, the flight number matches between SimBrief and the MCDU, and this option is enabled. The preliminary loadsheet can also be sent for all flights if not enabled.  
@@ -48,7 +50,8 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 
 ## Command to Set
 In the settings, under **Controllers**, you can find a new command to assign to your key/button to open/close the ToLoad HUB window.  
-The command name is `Toggle_ToLoadHub`.
+The command name is `FlyWithLua -> TOLOADHUB -> Toggle ToLoadHub Window`.
+You can assign a command to reset the window: `FlyWithLua -> TOLOADHUB -> Reset Position ToLoadHUB Window`
 
 ## Contributing  
 Contributions are welcome! Feel free to submit pull requests or report issues to help improve the plugin.  

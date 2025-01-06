@@ -23,7 +23,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.10.1",
+    version = "0.10.2",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -92,12 +92,15 @@ local toLoadHub = {
             auto_open = true,
             auto_init = true,
             simulate_cargo = true,
+            boarding_speed = 0,
         },
         simbrief = {
+            username = "",
             auto_fetch = true,
             randomize_passenger = true,
         },
         hoppie = {
+            secret = "",
             enable_loadsheet = true,
             preliminary_loadsheet = false
         },
@@ -132,6 +135,7 @@ local toloadhub_window = nil
 
 local urls = {
     simbrief_fplan = "http://www.simbrief.com/api/xml.fetcher.php?userid=",
+    simbrief_fplan_user = "http://www.simbrief.com/api/xml.fetcher.php?username=",
     hoppie_connect = "https://www.hoppie.nl/acars/system/connect.html"
 }
 local LIP = require("LIP")
@@ -142,6 +146,13 @@ local toLoadHub_NoPax = 0
 local toLoadHub_AftCargo = 0
 local toLoadHub_FwdCargo = 0
 local toLoadHub_PaxDistrib = 0.5
+
+if not SUPPORTS_FLOATING_WINDOWS then
+    -- to make sure the script doesn't stop old FlyWithLua versions
+    logMsg("imgui not supported by your FlyWithLua version")
+    return
+end
+
 require("LuaXml")
 
 math.randomseed(os.time())
@@ -212,11 +223,22 @@ local function divideCargoFwdAft()
 end
 
 local function fetchSimbriefFPlan()
-    if not toLoadHub_simBriefID or toLoadHub_simBriefID == nil or not toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") then
-        debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
-        return false
+    local url = ""
+    if PLANE_ICAO == "A20N" then
+        if not toLoadHub_simBriefID or toLoadHub_simBriefID == nil or not toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") then
+            debug(string.format("[%s] SimBrief userID not set.", toLoadHub.title))
+            return false
+        end
+        url = urls.simbrief_fplan .. toLoadHub_simBriefID
+    else
+        if toLoadHub.settings.simbrief.username == nil or not toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") then
+            debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
+            return false
+        end
+        url = urls.simbrief_fplan_user .. toLoadHub.settings.simbrief.username
     end
-    local response_xml, statusCode = http.request(urls.simbrief_fplan .. toLoadHub_simBriefID)
+
+    local response_xml, statusCode = http.request(url)
 
     if statusCode ~= 200 then
         debug(string.format("[%s] SimBrief API returned an error: [%d]", toLoadHub.title, statusCode))
@@ -307,7 +329,6 @@ local function resetAirplaneParameters()
     toLoadHub.cargo = 0
     toLoadHub.cargo_aft = 0
     toLoadHub.cargo_fwd = 0
-    toLoadHub.boarding_speed = 0
     toLoadHub.boarding_secnds_per_pax = 0
     toLoadHub.boarding_secnds_per_cargo_unit = 0
     toLoadHub.next_boarding_check = os.time()
@@ -869,20 +890,20 @@ function viewToLoadHubWindow()
                 and "Real (less than a minute)"
                 or string.format("Real (%d minute%s)", realModeMinutes, realModeMinutes > 1 and "s" or "")
 
-            if imgui.RadioButton("Instant", toLoadHub.boarding_speed == 0) then
-                toLoadHub.boarding_speed = 0
+            if imgui.RadioButton("Instant", toLoadHub.settings.general.boarding_speed == 0) then
+                toLoadHub.settings.general.boarding_speed = 0
                 toLoadHub.boarding_secnds_per_pax = 0
                 toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[1]
             end
 
-            if imgui.RadioButton(labelFast, toLoadHub.boarding_speed == 1) then
-                toLoadHub.boarding_speed = 1
+            if imgui.RadioButton(labelFast, toLoadHub.settings.general.boarding_speed == 1) then
+                toLoadHub.settings.general.boarding_speed = 1
                 toLoadHub.boarding_secnds_per_pax = generalSpeed
                 toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[2]
             end
 
-            if imgui.RadioButton(labelReal, toLoadHub.boarding_speed == 2) then
-                toLoadHub.boarding_speed = 2
+            if imgui.RadioButton(labelReal, toLoadHub.settings.general.boarding_speed == 2) then
+                toLoadHub.settings.general.boarding_speed = 2
                 toLoadHub.boarding_secnds_per_pax = generalSpeed * 2
                 toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[3]
             end
@@ -948,6 +969,11 @@ function viewToLoadHubWindowSettings()
     imgui.TextUnformatted("SimBrief Settings:")
     imgui.PopStyleColor()
 
+    imgui.TextUnformatted("Username (not needed for A320neo):")
+    imgui.SameLine(75)
+    changed, newval = imgui.InputText("##Username", toLoadHub.settings.simbrief.Username, 50)
+    if changed then toLoadHub.settings.simbrief.Username , setSave = newval, true end
+
     changed, newval = imgui.Checkbox("Auto Fetch at beginning", toLoadHub.settings.simbrief.auto_fetch)
     if changed then toLoadHub.settings.simbrief.auto_fetch , setSave = newval, true end
 
@@ -967,6 +993,12 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Preliminary Loadsheet Only for Long-haul (+7hrs)", toLoadHub.settings.hoppie.preliminary_loadsheet)
     if changed then toLoadHub.settings.hoppie.preliminary_loadsheet , setSave = newval, true end
+
+    imgui.TextUnformatted("Secret (not needed for A320neo):")
+    imgui.SameLine(75)
+    local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
+    changed, newval = imgui.InputText("##secret", masked_secret, 80)
+    if changed then toLoadHub.settings.hoppie.secret , setSave = newval, true end
 
     imgui.Separator()
     imgui.Spacing()
@@ -1035,6 +1067,19 @@ function toggleToloadHubWindow()
     loadToloadHubWindow()
 end
 
+function resetPositionToloadHubWindow()
+    toLoadHub.settings.general.window_x = 160
+    toLoadHub.settings.general.window_y = 200
+    toLoadHub.settings.general.window_width = 400
+    toLoadHub.settings.general.window_height = 250
+    if toLoadHub.visible_main or toLoadHub.visible_settings then 
+        float_wnd_set_position(toloadhub_window, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
+    else
+        loadToloadHubWindow()
+    end
+    
+end
+
 -- == Main Loop Often (1 Sec) ==
 function toloadHubMainLoop()
     -- All sounds played and airplane debooarded
@@ -1055,7 +1100,7 @@ function toloadHubMainLoop()
     -- Onboarding Phase and Finishing Onboarding
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         if toLoadHub_NoPax < toLoadHub.pax_count and now > toLoadHub.next_boarding_check then
-            if toLoadHub.boarding_speed == 0 then
+            if toLoadHub.settings.general.boarding_speed == 0 then
                 toLoadHub_NoPax = toLoadHub.pax_count
             else
                 toLoadHub_NoPax = toLoadHub_NoPax + 1
@@ -1077,7 +1122,7 @@ function toloadHubMainLoop()
     end
     if toLoadHub.phases.is_cargo_started and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         if (toLoadHub_FwdCargo + toLoadHub_AftCargo) < toLoadHub.cargo and now > toLoadHub.next_cargo_check then
-            if toLoadHub.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
+            if toLoadHub.settings.general.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
                 toLoadHub_FwdCargo = toLoadHub.cargo_fwd
                 toLoadHub_AftCargo = toLoadHub.cargo_aft
             else
@@ -1095,7 +1140,7 @@ function toloadHubMainLoop()
     -- Deboarding Phase and Finishing Deboarding
     if toLoadHub.phases.is_deboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
         if toLoadHub_NoPax > 0 and now > toLoadHub.next_boarding_check then
-             if toLoadHub.boarding_speed == 0 then
+             if toLoadHub.settings.general.boarding_speed == 0 then
                 toLoadHub_NoPax = 0
             else
                 toLoadHub_NoPax = toLoadHub_NoPax - 1
@@ -1113,7 +1158,7 @@ function toloadHubMainLoop()
     if toLoadHub.phases.is_deboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
         openDoorsCargo()
         if (toLoadHub_FwdCargo + toLoadHub_AftCargo) > 0 and now > toLoadHub.next_cargo_check then
-            if toLoadHub.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
+            if toLoadHub.settings.general.boarding_speed == 0 or not toLoadHub.settings.general.simulate_cargo then
                 toLoadHub_FwdCargo = 0
                 toLoadHub_AftCargo = 0
             else
@@ -1178,8 +1223,16 @@ function toloadHubMainLoop()
         data_f.isFinal = true
         data_f.labelText = "@Final@"
         data_f.flt_no = toLoadHub_flight_no
-        data_f.zfw = string.format("%.1f",toLoadHub_zfw/1000)
-        data_f.zfwcg = string.format("%.1f",toLoadHub_zfwCG)
+        if toLoadHub_zfw == nil then
+            data_f.zfw = string.format("%.1f",(toLoadHub_m_total - toLoadHub_m_fuel_total)/1000)
+        else
+            data_f.zfw = string.format("%.1f",toLoadHub_zfw/1000)
+        end
+        if toLoadHub_zfwCG == nil then
+            data_f.zfwcg = "--.-"
+        else
+            data_f.zfwcg = string.format("%.1f",toLoadHub_zfwCG)
+        end
         data_f.gwcg = string.format("%.1f",toLoadHub_currentCG)
         data_f.f_blk = string.format("%.1f",toLoadHub_WriteFOB_XP/1000)
         if toLoadHub_WriteFOB_XP + 20 < toLoadHub.simbrief.plan_ramp then
@@ -1199,8 +1252,16 @@ function toloadHubMainLoop()
         data_p.isFinal = false
         data_p.labelText = "Prelim."
         data_p.zfw = string.format("%.1f", toLoadHub.simbrief.est_zfw/1000)
-        data_p.zfwcg = string.format("%.1f", toLoadHub_blockZfwCG)
-        data_p.gwcg = string.format("%.1f", toLoadHub_blockCG)
+        if toLoadHub_blockZfwCG == nil then
+            data_p.zfwcg = "--.-"
+        else
+            data_p.zfwcg = string.format("%.1f", toLoadHub_blockZfwCG)
+        end
+        if toLoadHub_blockCG == nil then
+            data_p.gwcg = "--.-"
+        else
+            data_p.gwcg = string.format("%.1f", toLoadHub_blockCG)
+        end
         data_p.f_blk = string.format("%.1f",toLoadHub.simbrief.plan_ramp/1000)
         data_p.flt_no = toLoadHub_flight_no
         sendLoadsheetToToliss(data_p)
@@ -1221,17 +1282,55 @@ dataref("toLoadHub_Doors_6", "AirbusFBW/PaxDoorModeArray", "writeable", 6)
 dataref("toLoadHub_CargoDoors_1", "AirbusFBW/CargoDoorModeArray", "writeable", 0)
 dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1)
 
-dataref("toLoadHub_zfw", "toliss_airbus/iscsinterface/zfw", "readonly")
-dataref("toLoadHub_zfwCG", "toliss_airbus/iscsinterface/zfwCG", "readonly")
-dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonly")
+if XPLMFindDataRef("toliss_airbus/iscsinterface/currentCG") then
+    dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonly")
+elseif XPLMFindDataRef("AirbusFBW/CGLocationPercent") then
+    dataref("toLoadHub_currentCG", "AirbusFBW/CGLocationPercent", "readonly")
+end
+
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/zfw") then
+    dataref("toLoadHub_zfw", "toliss_airbus/iscsinterface/zfw", "readonly")
+else
+    toLoadHub_zfw = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
+    dataref("toLoadHub_zfwCG", "toliss_airbus/iscsinterface/zfwCG", "readonly")
+else
+    toLoadHub_zfwCG = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/simBriefID") then
+    dataref("toLoadHub_simBriefID", "toliss_airbus/iscsinterface/simBriefID", "readonly")
+else
+    toLoadHub_simBriefID = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/hoppieLogon") then
+    dataref("toLoadHub_hoppieLogon", "toliss_airbus/iscsinterface/hoppieLogon", "readonly")
+else
+    toLoadHub_hoppieLogon = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/blockZfwCG") then
+    dataref("toLoadHub_blockZfwCG", "toliss_airbus/iscsinterface/blockZfwCG", "readonly")
+else
+    toLoadHub_blockZfwCG = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/blockCG") then
+    dataref("toLoadHub_blockCG", "toliss_airbus/iscsinterface/blockCG", "readonly")
+else
+    toLoadHub_blockCG = nil
+end
+dataref("toLoadHub_m_total", "sim/flightmodel/weight/m_total", "readonly")
+dataref("toLoadHub_m_fuel_total", "sim/flightmodel/weight/m_fuel_total", "readonly")
+
 dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
-dataref("toLoadHub_simBriefID", "toliss_airbus/iscsinterface/simBriefID", "readonly")
-dataref("toLoadHub_hoppieLogon", "toliss_airbus/iscsinterface/hoppieLogon", "readonly")
 dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
 
--- temporary iscs
-dataref("toLoadHub_blockZfwCG", "toliss_airbus/iscsinterface/blockZfwCG", "readonly")
-dataref("toLoadHub_blockCG", "toliss_airbus/iscsinterface/blockCG", "readonly")
+
 
 
 setAirplaneNumbers()
@@ -1243,8 +1342,12 @@ end
 if toLoadHub.settings.simbrief.auto_fetch then
     fetchSimbriefFPlan()
 end
-add_macro("ToLoad Hub", "loadToloadHubWindow()")
-create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Togle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
+add_macro("ToLoad Hub - Main Window", "loadToloadHubWindow()")
+add_macro("ToLoad Hub - Reset Window Position", "resetPositionToloadHubWindow()")
+
+create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Toggle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
+create_command("FlyWithLua/TOLOADHUB/ResetPosition_toloadhub", "Reset Position ToLoadHUB window", "resetPositionToloadHubWindow()", "", "")
+
 do_often("toloadHubMainLoop()")
 
 if toLoadHub.settings.general.auto_open then
