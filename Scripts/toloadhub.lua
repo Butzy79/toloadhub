@@ -1330,9 +1330,6 @@ dataref("toLoadHub_m_fuel_total", "sim/flightmodel/weight/m_fuel_total", "readon
 dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
 dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
 
-
-
-
 setAirplaneNumbers()
 readSettingsToFile()
 
