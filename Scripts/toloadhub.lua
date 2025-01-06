@@ -95,10 +95,12 @@ local toLoadHub = {
             boarding_speed = 0,
         },
         simbrief = {
+            username = "",
             auto_fetch = true,
             randomize_passenger = true,
         },
         hoppie = {
+            secret = "",
             enable_loadsheet = true,
             preliminary_loadsheet = false
         },
@@ -133,6 +135,7 @@ local toloadhub_window = nil
 
 local urls = {
     simbrief_fplan = "http://www.simbrief.com/api/xml.fetcher.php?userid=",
+    simbrief_fplan_user = "http://www.simbrief.com/api/xml.fetcher.php?username=",
     hoppie_connect = "https://www.hoppie.nl/acars/system/connect.html"
 }
 local LIP = require("LIP")
@@ -220,11 +223,22 @@ local function divideCargoFwdAft()
 end
 
 local function fetchSimbriefFPlan()
-    if not toLoadHub_simBriefID or toLoadHub_simBriefID == nil or not toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") then
-        debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
-        return false
+    local url = ""
+    if PLANE_ICAO == "A20N" then
+        if not toLoadHub_simBriefID or toLoadHub_simBriefID == nil or not toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") then
+            debug(string.format("[%s] SimBrief userID not set.", toLoadHub.title))
+            return false
+        end
+        url = urls.simbrief_fplan .. toLoadHub_simBriefID
+    else
+        if toLoadHub.settings.simbrief.username == nil or not toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") then
+            debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
+            return false
+        end
+        url = urls.simbrief_fplan_user .. toLoadHub.settings.simbrief.username
     end
-    local response_xml, statusCode = http.request(urls.simbrief_fplan .. toLoadHub_simBriefID)
+
+    local response_xml, statusCode = http.request(url)
 
     if statusCode ~= 200 then
         debug(string.format("[%s] SimBrief API returned an error: [%d]", toLoadHub.title, statusCode))
@@ -955,6 +969,11 @@ function viewToLoadHubWindowSettings()
     imgui.TextUnformatted("SimBrief Settings:")
     imgui.PopStyleColor()
 
+    imgui.TextUnformatted("Username (not needed for A320neo):")
+    imgui.SameLine(75)
+    changed, newval = imgui.InputText("##Username", toLoadHub.settings.simbrief.Username, 50)
+    if changed then toLoadHub.settings.simbrief.Username , setSave = newval, true end
+
     changed, newval = imgui.Checkbox("Auto Fetch at beginning", toLoadHub.settings.simbrief.auto_fetch)
     if changed then toLoadHub.settings.simbrief.auto_fetch , setSave = newval, true end
 
@@ -974,6 +993,12 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Preliminary Loadsheet Only for Long-haul (+7hrs)", toLoadHub.settings.hoppie.preliminary_loadsheet)
     if changed then toLoadHub.settings.hoppie.preliminary_loadsheet , setSave = newval, true end
+
+    imgui.TextUnformatted("Secret (not needed for A320neo):")
+    imgui.SameLine(75)
+    local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
+    changed, newval = imgui.InputText("##secret", masked_secret, 80)
+    if changed then toLoadHub.settings.hoppie.secret , setSave = newval, true end
 
     imgui.Separator()
     imgui.Spacing()
@@ -1198,8 +1223,16 @@ function toloadHubMainLoop()
         data_f.isFinal = true
         data_f.labelText = "@Final@"
         data_f.flt_no = toLoadHub_flight_no
-        data_f.zfw = string.format("%.1f",toLoadHub_zfw/1000)
-        data_f.zfwcg = string.format("%.1f",toLoadHub_zfwCG)
+        if toLoadHub_zfw == nil then
+            data_f.zfw = string.format("%.1f",(toLoadHub_m_total - toLoadHub_m_fuel_total)/1000)
+        else
+            data_f.zfw = string.format("%.1f",toLoadHub_zfw/1000)
+        end
+        if toLoadHub_zfwCG == nil then
+            data_f.zfwcg = "--.-"
+        else
+            data_f.zfwcg = string.format("%.1f",toLoadHub_zfwCG)
+        end
         data_f.gwcg = string.format("%.1f",toLoadHub_currentCG)
         data_f.f_blk = string.format("%.1f",toLoadHub_WriteFOB_XP/1000)
         if toLoadHub_WriteFOB_XP + 20 < toLoadHub.simbrief.plan_ramp then
@@ -1219,8 +1252,16 @@ function toloadHubMainLoop()
         data_p.isFinal = false
         data_p.labelText = "Prelim."
         data_p.zfw = string.format("%.1f", toLoadHub.simbrief.est_zfw/1000)
-        data_p.zfwcg = string.format("%.1f", toLoadHub_blockZfwCG)
-        data_p.gwcg = string.format("%.1f", toLoadHub_blockCG)
+        if toLoadHub_blockZfwCG == nil then
+            data_p.zfwcg = "--.-"
+        else
+            data_p.zfwcg = string.format("%.1f", toLoadHub_blockZfwCG)
+        end
+        if toLoadHub_blockCG == nil then
+            data_p.gwcg = "--.-"
+        else
+            data_p.gwcg = string.format("%.1f", toLoadHub_blockCG)
+        end
         data_p.f_blk = string.format("%.1f",toLoadHub.simbrief.plan_ramp/1000)
         data_p.flt_no = toLoadHub_flight_no
         sendLoadsheetToToliss(data_p)
@@ -1241,17 +1282,55 @@ dataref("toLoadHub_Doors_6", "AirbusFBW/PaxDoorModeArray", "writeable", 6)
 dataref("toLoadHub_CargoDoors_1", "AirbusFBW/CargoDoorModeArray", "writeable", 0)
 dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1)
 
-dataref("toLoadHub_zfw", "toliss_airbus/iscsinterface/zfw", "readonly")
-dataref("toLoadHub_zfwCG", "toliss_airbus/iscsinterface/zfwCG", "readonly")
-dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonly")
+if XPLMFindDataRef("toliss_airbus/iscsinterface/currentCG") then
+    dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonly")
+elseif XPLMFindDataRef("AirbusFBW/CGLocationPercent") then
+    dataref("toLoadHub_currentCG", "AirbusFBW/CGLocationPercent", "readonly")
+end
+
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/zfw") then
+    dataref("toLoadHub_zfw", "toliss_airbus/iscsinterface/zfw", "readonly")
+else
+    toLoadHub_zfw = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
+    dataref("toLoadHub_zfwCG", "toliss_airbus/iscsinterface/zfwCG", "readonly")
+else
+    toLoadHub_zfwCG = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/simBriefID") then
+    dataref("toLoadHub_simBriefID", "toliss_airbus/iscsinterface/simBriefID", "readonly")
+else
+    toLoadHub_simBriefID = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/hoppieLogon") then
+    dataref("toLoadHub_hoppieLogon", "toliss_airbus/iscsinterface/hoppieLogon", "readonly")
+else
+    toLoadHub_hoppieLogon = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/blockZfwCG") then
+    dataref("toLoadHub_blockZfwCG", "toliss_airbus/iscsinterface/blockZfwCG", "readonly")
+else
+    toLoadHub_blockZfwCG = nil
+end
+
+if XPLMFindDataRef("toliss_airbus/iscsinterface/blockCG") then
+    dataref("toLoadHub_blockCG", "toliss_airbus/iscsinterface/blockCG", "readonly")
+else
+    toLoadHub_blockCG = nil
+end
+dataref("toLoadHub_m_total", "sim/flightmodel/weight/m_total", "readonly")
+dataref("toLoadHub_m_fuel_total", "sim/flightmodel/weight/m_fuel_total", "readonly")
+
 dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
-dataref("toLoadHub_simBriefID", "toliss_airbus/iscsinterface/simBriefID", "readonly")
-dataref("toLoadHub_hoppieLogon", "toliss_airbus/iscsinterface/hoppieLogon", "readonly")
 dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
 
--- temporary iscs
-dataref("toLoadHub_blockZfwCG", "toliss_airbus/iscsinterface/blockZfwCG", "readonly")
-dataref("toLoadHub_blockCG", "toliss_airbus/iscsinterface/blockCG", "readonly")
+
 
 
 setAirplaneNumbers()

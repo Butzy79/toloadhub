@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Default Boarding/Deboarding speed saved
 ### Fixed
 - Bugfix on VR view
+- Dataref for 
 
 ## [0.10.1] - 2025-01-05
 ### Fixed
