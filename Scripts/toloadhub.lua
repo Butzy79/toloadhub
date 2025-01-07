@@ -1382,6 +1382,8 @@ end
 
 if XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
     dataref("toLoadHub_zfwCG", "toliss_airbus/iscsinterface/zfwCG", "readonly")
+elseif XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
+    dataref("toLoadHub_zfwCG", "toliss_airbus/init/ZFWCG", "readonly")
 else
     toLoadHub_zfwCG = nil
 end
@@ -1400,6 +1402,8 @@ end
 
 if XPLMFindDataRef("toliss_airbus/iscsinterface/blockZfwCG") then
     dataref("toLoadHub_blockZfwCG", "toliss_airbus/iscsinterface/blockZfwCG", "readonly")
+elseif XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
+    dataref("toLoadHub_blockZfwCG", "toliss_airbus/init/ZFWCG", "readonly")
 else
     toLoadHub_blockZfwCG = nil
 end
