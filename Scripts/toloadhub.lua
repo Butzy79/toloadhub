@@ -33,6 +33,7 @@ local toLoadHub = {
     max_cargo_aft = 5000,
     max_fuel = 20000,
     cargo = 0,
+    error_message = nil,
     cargo_aft = 0,
     cargo_fwd = 0,
     pax_distribution_range = {35, 60},
@@ -244,6 +245,7 @@ local function fetchSimbriefFPlan()
         url = urls.simbrief_fplan .. toLoadHub_simBriefID
     else
     if not toLoadHub.settings.simbrief.username or toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") == "" then
+        toLoadHub.error_message = "Simbrief username not set."
         debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
         return false
     end
@@ -253,6 +255,7 @@ local function fetchSimbriefFPlan()
     local response_xml, statusCode = http.request(url)
 
     if statusCode ~= 200 then
+        toLoadHub.error_message = "Simbrief error, please try again."
         debug(string.format("[%s] SimBrief API returned an error: [%d]", toLoadHub.title, statusCode))
         return false
     end
@@ -354,6 +357,7 @@ local function resetAirplaneParameters()
     toLoadHub.boarding_cargo_sound_played = false
     toLoadHub.deboarding_cargo_sound_played = false
     toLoadHub.full_deboard_sound = false
+    toLoadHub.error_message = nil
     for key in pairs(toLoadHub.hoppie) do
         if key == "loadsheet_check" then
             toLoadHub.hoppie[key] = os.time()
@@ -549,6 +553,7 @@ local function sendLoadsheetToToliss(data)
     debug(string.format("[%s] Starting Loadsheet %s composition.", toLoadHub.title, data.labelText))
 
     if not toLoadHub_hoppieLogon or toLoadHub_hoppieLogon == nil or not toLoadHub_hoppieLogon:gsub("^%s*(.-)%s*$", "%1") then
+        toLoadHub.error_message = "Hoppie secret not set."
         debug(string.format("[%s] Hoppie secret not set.", toLoadHub.title))
         return false
     end
@@ -588,6 +593,7 @@ local function sendLoadsheetToToliss(data)
     debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
     if code == 200 and data.isFinal then toLoadHub.hoppie.loadsheet_sent = true end
     if code == 200 and not data.isFinal then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
+    if code ~= 200 then toLoadHub.error_message = "Hoppie returned an error. Please check your secret value."
     toLoadHub.hoppie.loadsheet_sending = false
 end
 
@@ -627,6 +633,15 @@ function viewToLoadHubWindow()
         toLoadHub.settings.general.window_height = vrwinHeight
         toLoadHub.settings.general.window_width = vrwinWidth
     end
+    if toLoadHub.error_message ~= nil then
+        imgui.TextUnformatted(toLoadHub.error_message)
+        if imgui.Button("Ok!") then
+            toLoadHub.error_message = nil
+        end
+        imgui.Separator()
+        imgui.Spacing()
+    end
+
     if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
