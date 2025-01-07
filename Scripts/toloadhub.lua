@@ -244,11 +244,11 @@ local function fetchSimbriefFPlan()
     if toLoadHub_simBriefID and toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") ~= "" then
         url = urls.simbrief_fplan .. toLoadHub_simBriefID
     else
-    if not toLoadHub.settings.simbrief.username or toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") == "" then
-        toLoadHub.error_message = "Simbrief username not set."
-        debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
-        return false
-    end
+        if not toLoadHub.settings.simbrief.username or toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") == "" then
+            toLoadHub.error_message = "Simbrief username not set."
+            debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
+            return false
+        end
         url = urls.simbrief_fplan_user .. toLoadHub.settings.simbrief.username
     end
 
@@ -593,7 +593,7 @@ local function sendLoadsheetToToliss(data)
     debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
     if code == 200 and data.isFinal then toLoadHub.hoppie.loadsheet_sent = true end
     if code == 200 and not data.isFinal then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
-    if code ~= 200 then toLoadHub.error_message = "Hoppie returned an error. Please check your secret value."
+    if code ~= 200 then toLoadHub.error_message = "Hoppie returned an error. Please check your secret value." end
     toLoadHub.hoppie.loadsheet_sending = false
 end
 
@@ -633,10 +633,11 @@ function viewToLoadHubWindow()
         toLoadHub.settings.general.window_height = vrwinHeight
         toLoadHub.settings.general.window_width = vrwinWidth
     end
+
     if toLoadHub.error_message ~= nil then
+        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
         imgui.TextUnformatted(toLoadHub.error_message)
         imgui.PopStyleColor()
-
         if imgui.Button("Ok!") then
             toLoadHub.error_message = nil
         end
@@ -1046,7 +1047,12 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.InputText("##secret", masked_secret, 80)
     if changed then toLoadHub.settings.hoppie.secret , setSave = newval, true end
     imgui.SetWindowFontScale(0.8)
-    imgui.TextUnformatted("The secret can be found by registering at https://www.hoppie.nl/, received via email, and used as your logon code.")
+    imgui.TextUnformatted("The secret can be found by registering at:")
+    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFEBCE87)
+    imgui.SetNextItemWidth(280)
+    imgui.InputText("##link", "https://www.hoppie.nl/acars/system/register.html", 48, imgui.constant.InputTextFlags.ReadOnly)
+    imgui.PopStyleColor()
+    imgui.TextUnformatted("received via email and used as your logon code.")
     imgui.SetWindowFontScale(1.0)
 
     imgui.Separator()
