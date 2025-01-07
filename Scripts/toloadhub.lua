@@ -635,6 +635,8 @@ function viewToLoadHubWindow()
     end
     if toLoadHub.error_message ~= nil then
         imgui.TextUnformatted(toLoadHub.error_message)
+        imgui.PopStyleColor()
+
         if imgui.Button("Ok!") then
             toLoadHub.error_message = nil
         end
@@ -643,7 +645,7 @@ function viewToLoadHubWindow()
     end
 
     if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
-        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF7F7F7F)
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
         imgui.PopStyleColor()
         if imgui.Button("Init", 100, 30) then
