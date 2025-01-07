@@ -23,7 +23,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.10.3.1",
+    version = "0.10.4",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
