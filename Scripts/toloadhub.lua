@@ -23,7 +23,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.10.3",
+    version = "0.10.3.1",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -241,7 +241,7 @@ end
 
 local function fetchSimbriefFPlan()
     local url = ""
-    if toLoadHub_simBriefID and toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") ~= "" then
+    if toLoadHub_simBriefID and toLoadHub_simBriefID ~=nil and toLoadHub_simBriefID > 0 and toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") ~= "" then
         url = urls.simbrief_fplan .. toLoadHub_simBriefID
     else
         if not toLoadHub.settings.simbrief.username or toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") == "" then
