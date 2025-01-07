@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.10.3] - 2025-01-07
 ### Fixed
+- Changed the cargo performances
 - Window focus popup all time
 
 ## [0.10.2] - 2025-01-06
