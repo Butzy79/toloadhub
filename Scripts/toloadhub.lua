@@ -1000,7 +1000,7 @@ function viewToLoadHubWindowSettings()
     imgui.TextUnformatted("SimBrief Settings:")
     imgui.PopStyleColor()
 
-    imgui.TextUnformatted("Username (not needed for A320neo):")
+    imgui.TextUnformatted("Username:")
     changed, newval = imgui.InputText("##username", toLoadHub.settings.simbrief.username, 50)
     if changed then toLoadHub.settings.simbrief.username , setSave = newval, true end
 
@@ -1024,10 +1024,13 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Preliminary Loadsheet Only for Long-haul (+7hrs)", toLoadHub.settings.hoppie.preliminary_loadsheet)
     if changed then toLoadHub.settings.hoppie.preliminary_loadsheet , setSave = newval, true end
 
-    imgui.TextUnformatted("Secret (not needed for A320neo):")
+    imgui.TextUnformatted("Secret:")
     local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
     changed, newval = imgui.InputText("##secret", masked_secret, 80)
     if changed then toLoadHub.settings.hoppie.secret , setSave = newval, true end
+    imgui.SetWindowFontScale(0.8)
+    imgui.TextUnformatted("The secret can be found by registering at https://www.hoppie.nl/, received via email, and used as your logon code.")
+    imgui.SetWindowFontScale(1.0)
 
     imgui.Separator()
     imgui.Spacing()
