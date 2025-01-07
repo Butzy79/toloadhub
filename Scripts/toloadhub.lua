@@ -1003,7 +1003,7 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
     if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
 
-    if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") then
+    if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") ~= nil then
         changed, newval = imgui.Checkbox("Auto Start and Stop JD Ground Hanling", toLoadHub.settings.general.simulate_jdgh)
         if changed then toLoadHub.settings.general.simulate_jdgh , setSave = newval, true end
     end
@@ -1269,7 +1269,7 @@ function toloadHubMainLoop()
     if not toLoadHub.phases.is_onboarded and toLoadHub.phases.is_pax_onboarded and toLoadHub.phases.is_cargo_onboarded and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_onboarded = true
         applyChange = true
-         if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") and toLoadHub.settings.general.simulate_jdgh then
+         if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") ~= nil and toLoadHub.settings.general.simulate_jdgh then
             command_once( "jd/ghd/driveavay" )
             closeDoorsCatering()
         end
