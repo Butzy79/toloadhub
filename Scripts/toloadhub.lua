@@ -23,7 +23,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.10.2",
+    version = "0.10.3",
     file = "toloadhub.ini",
     visible_main = false,
     visible_settings = false,
@@ -33,13 +33,14 @@ local toLoadHub = {
     max_cargo_aft = 5000,
     max_fuel = 20000,
     cargo = 0,
+    error_message = nil,
     cargo_aft = 0,
     cargo_fwd = 0,
     pax_distribution_range = {35, 60},
     cargo_fwd_distribution_range = {55, 75},
     cargo_starting_range = {45, 60},
-    cargo_speeds = {0, 3, 6},
-    kgPerUnit = 50,
+    cargo_speeds = {0, 10, 13},
+    kgPerUnit = 25,
     first_init = false,
     phases = {
         is_ready_to_start = false,
@@ -55,6 +56,18 @@ local toLoadHub = {
         is_deboarding = false,
         is_deboarding_pause = false,
         is_deboarded = false,
+    },
+    focus_windows = {
+        pax_load = false,
+        pax_loaded = false,
+        cargo_load = false,
+        cargo_loaded = false,
+        pax_unload = false,
+        pax_unloaded = false,
+        cargo_unload = false,
+        cargo_unloaded = false,
+        all_unload = false,
+        all_unloaded = false
     },
     boarding_speed = 0,
     boarding_secnds_per_pax = 0,
@@ -228,14 +241,11 @@ end
 
 local function fetchSimbriefFPlan()
     local url = ""
-    if PLANE_ICAO == "A20N" then
-        if not toLoadHub_simBriefID or toLoadHub_simBriefID == nil or not toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") then
-            debug(string.format("[%s] SimBrief userID not set.", toLoadHub.title))
-            return false
-        end
+    if toLoadHub_simBriefID and toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") ~= "" then
         url = urls.simbrief_fplan .. toLoadHub_simBriefID
     else
-        if toLoadHub.settings.simbrief.username == nil or not toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") then
+        if not toLoadHub.settings.simbrief.username or toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") == "" then
+            toLoadHub.error_message = "Simbrief username not set."
             debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
             return false
         end
@@ -245,6 +255,7 @@ local function fetchSimbriefFPlan()
     local response_xml, statusCode = http.request(url)
 
     if statusCode ~= 200 then
+        toLoadHub.error_message = "Simbrief error, please try again."
         debug(string.format("[%s] SimBrief API returned an error: [%d]", toLoadHub.title, statusCode))
         return false
     end
@@ -346,6 +357,7 @@ local function resetAirplaneParameters()
     toLoadHub.boarding_cargo_sound_played = false
     toLoadHub.deboarding_cargo_sound_played = false
     toLoadHub.full_deboard_sound = false
+    toLoadHub.error_message = nil
     for key in pairs(toLoadHub.hoppie) do
         if key == "loadsheet_check" then
             toLoadHub.hoppie[key] = os.time()
@@ -356,6 +368,9 @@ local function resetAirplaneParameters()
     toLoadHub.setWeightCommand = false
     for key in pairs(toLoadHub.phases) do
         toLoadHub.phases[key] = false
+    end
+    for key in pairs(toLoadHub.focus_windows) do
+        toLoadHub.focus_windows[key] = false
     end
     for key in pairs(toLoadHub.simbrief) do
         toLoadHub.simbrief[key] = nil
@@ -538,6 +553,7 @@ local function sendLoadsheetToToliss(data)
     debug(string.format("[%s] Starting Loadsheet %s composition.", toLoadHub.title, data.labelText))
 
     if not toLoadHub_hoppieLogon or toLoadHub_hoppieLogon == nil or not toLoadHub_hoppieLogon:gsub("^%s*(.-)%s*$", "%1") then
+        toLoadHub.error_message = "Hoppie secret not set."
         debug(string.format("[%s] Hoppie secret not set.", toLoadHub.title))
         return false
     end
@@ -577,6 +593,7 @@ local function sendLoadsheetToToliss(data)
     debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
     if code == 200 and data.isFinal then toLoadHub.hoppie.loadsheet_sent = true end
     if code == 200 and not data.isFinal then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
+    if code ~= 200 then toLoadHub.error_message = "Hoppie returned an error. Please check your secret value." end
     toLoadHub.hoppie.loadsheet_sending = false
 end
 
@@ -616,8 +633,20 @@ function viewToLoadHubWindow()
         toLoadHub.settings.general.window_height = vrwinHeight
         toLoadHub.settings.general.window_width = vrwinWidth
     end
+
+    if toLoadHub.error_message ~= nil then
+        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
+        imgui.TextUnformatted(toLoadHub.error_message)
+        imgui.PopStyleColor()
+        if imgui.Button("Ok!") then
+            toLoadHub.error_message = nil
+        end
+        imgui.Separator()
+        imgui.Spacing()
+    end
+
     if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
-        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF7F7F7F)
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
         imgui.PopStyleColor()
         if imgui.Button("Init", 100, 30) then
@@ -974,7 +1003,7 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
     if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
 
-    if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") then
+    if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") ~= nil then
         changed, newval = imgui.Checkbox("Auto Start and Stop JD Ground Hanling", toLoadHub.settings.general.simulate_jdgh)
         if changed then toLoadHub.settings.general.simulate_jdgh , setSave = newval, true end
     end
@@ -989,7 +1018,7 @@ function viewToLoadHubWindowSettings()
     imgui.TextUnformatted("SimBrief Settings:")
     imgui.PopStyleColor()
 
-    imgui.TextUnformatted("Username (not needed for A320neo):")
+    imgui.TextUnformatted("Username:")
     changed, newval = imgui.InputText("##username", toLoadHub.settings.simbrief.username, 50)
     if changed then toLoadHub.settings.simbrief.username , setSave = newval, true end
 
@@ -1013,10 +1042,18 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Preliminary Loadsheet Only for Long-haul (+7hrs)", toLoadHub.settings.hoppie.preliminary_loadsheet)
     if changed then toLoadHub.settings.hoppie.preliminary_loadsheet , setSave = newval, true end
 
-    imgui.TextUnformatted("Secret (not needed for A320neo):")
+    imgui.TextUnformatted("Secret:")
     local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
     changed, newval = imgui.InputText("##secret", masked_secret, 80)
     if changed then toLoadHub.settings.hoppie.secret , setSave = newval, true end
+    imgui.SetWindowFontScale(0.8)
+    imgui.TextUnformatted("The secret can be found by registering at:")
+    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFEBCE87)
+    imgui.SetNextItemWidth(280)
+    imgui.InputText("##link", "https://www.hoppie.nl/acars/system/register.html", 48, imgui.constant.InputTextFlags.ReadOnly)
+    imgui.PopStyleColor()
+    imgui.TextUnformatted("received via email and used as your logon code.")
+    imgui.SetWindowFontScale(1.0)
 
     imgui.Separator()
     imgui.Spacing()
@@ -1143,7 +1180,7 @@ function toloadHubMainLoop()
             end
         end
         if toLoadHub_NoPax >= toLoadHub.pax_count then
-            focusOnToLoadHub()
+            toLoadHub.focus_windows.pax_load = true
             closeDoors(true)
         end
     end
@@ -1166,7 +1203,7 @@ function toloadHubMainLoop()
         end
 
         if (toLoadHub_FwdCargo + toLoadHub_AftCargo) >= toLoadHub.cargo then
-            focusOnToLoadHub()
+            toLoadHub.focus_windows.cargo_load = true
             closeDoorsCargo()
         end
     end
@@ -1183,7 +1220,7 @@ function toloadHubMainLoop()
             end
         end
         if toLoadHub_NoPax <= 0 then
-            focusOnToLoadHub()
+            toLoadHub.focus_windows.pax_unload = true
             closeDoors(false)
         end
     end
@@ -1202,9 +1239,16 @@ function toloadHubMainLoop()
         end
 
          if (toLoadHub_FwdCargo + toLoadHub_AftCargo) <= 0 then
-            focusOnToLoadHub()
+            toLoadHub.focus_windows.cargo_unload = true
          end
     end
+
+    -- Focus windows --
+    if toLoadHub.focus_windows.pax_load and not toLoadHub.focus_windows.pax_loaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_loaded = true end
+    if toLoadHub.focus_windows.cargo_load and not toLoadHub.focus_windows.cargo_loaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_loaded = true end
+    if toLoadHub.focus_windows.pax_unload and not toLoadHub.focus_windows.pax_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_unloaded = true end
+    if toLoadHub.focus_windows.cargo_unload and not toLoadHub.focus_windows.cargo_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_unloaded = true end
+    if toLoadHub.focus_windows.all_unload and not toLoadHub.focus_windows.all_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.all_unloaded = true end
 
     -- Play sound if not played yet and they should be
     if toLoadHub_NoPax >= toLoadHub.pax_count and not toLoadHub.boarding_sound_played and toLoadHub.phases.is_pax_onboarded then playChimeSound() end
@@ -1225,7 +1269,7 @@ function toloadHubMainLoop()
     if not toLoadHub.phases.is_onboarded and toLoadHub.phases.is_pax_onboarded and toLoadHub.phases.is_cargo_onboarded and toLoadHub.phases.is_onboarding then
         toLoadHub.phases.is_onboarded = true
         applyChange = true
-         if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") and toLoadHub.settings.general.simulate_jdgh then
+         if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") ~= nil and toLoadHub.settings.general.simulate_jdgh then
             command_once( "jd/ghd/driveavay" )
             closeDoorsCatering()
         end
@@ -1338,6 +1382,8 @@ end
 
 if XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
     dataref("toLoadHub_zfwCG", "toliss_airbus/iscsinterface/zfwCG", "readonly")
+elseif XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
+    dataref("toLoadHub_zfwCG", "toliss_airbus/init/ZFWCG", "readonly")
 else
     toLoadHub_zfwCG = nil
 end
@@ -1356,6 +1402,8 @@ end
 
 if XPLMFindDataRef("toliss_airbus/iscsinterface/blockZfwCG") then
     dataref("toLoadHub_blockZfwCG", "toliss_airbus/iscsinterface/blockZfwCG", "readonly")
+elseif XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
+    dataref("toLoadHub_blockZfwCG", "toliss_airbus/init/ZFWCG", "readonly")
 else
     toLoadHub_blockZfwCG = nil
 end

@@ -46,6 +46,7 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 1. Download the plugin files from this repository.  
 2. Extract the contents to your FlyWithLua folder: 
 <X-Plane 12>/Resources/plugins/FlyWithLua/
+   - The file **toloadhub.lua** in Script goes into the Script directory, and the file **LIP.lua** in Modules goes into the Modules directory!
 3. Launch X-Plane 12 and enjoy managing your load with ToLoadHUB.  
 
 ## Command to Set
