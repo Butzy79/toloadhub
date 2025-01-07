@@ -240,17 +240,13 @@ end
 
 local function fetchSimbriefFPlan()
     local url = ""
-    if PLANE_ICAO == "A20N" then
-        if not toLoadHub_simBriefID or toLoadHub_simBriefID == nil or not toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") then
-            debug(string.format("[%s] SimBrief userID not set.", toLoadHub.title))
-            return false
-        end
+    if toLoadHub_simBriefID and toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") ~= "" then
         url = urls.simbrief_fplan .. toLoadHub_simBriefID
     else
-        if toLoadHub.settings.simbrief.username == nil or not toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") then
-            debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
-            return false
-        end
+    if not toLoadHub.settings.simbrief.username or toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") == "" then
+        debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
+        return false
+    end
         url = urls.simbrief_fplan_user .. toLoadHub.settings.simbrief.username
     end
 
