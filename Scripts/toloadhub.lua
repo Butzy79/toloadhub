@@ -113,7 +113,8 @@ local toLoadHub = {
             auto_init = true,
             simulate_cargo = true,
             boarding_speed = 0,
-            simulate_jdgh = false
+            simulate_jdgh = false,
+            is_lbs = false
         },
         simbrief = {
             username = "",
@@ -268,6 +269,16 @@ local function divideCargoFwdAft()
     toLoadHub.cargo_aft = toLoadHub.cargo - toLoadHub.cargo_fwd
 end
 
+local function setIsLib()
+    if toLoadHub.is_lbs then
+        toLoadHub.unitLabel = "LBS"
+        toLoadHub.unitTLabel = "kip"
+    else
+        toLoadHub.unitLabel = "KGS"
+        toLoadHub.unitTLabel = "T"
+    end
+end
+
 local function fetchSimbriefFPlan()
     if not toLoadHub.settings.simbrief.username or toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") == "" then
         toLoadHub.error_message = "Simbrief username not set."
@@ -321,16 +332,12 @@ local function fetchSimbriefFPlan()
     local freight_added = xml_data:find("freight_added")
     if toLoadHub.simbrief.units:lower() == 'lbs' then
         toLoadHub.is_lbs = true
-        toLoadHub.unitLabel = "LBS"
-        toLoadHub.unitTLabel = "kip"
         toLoadHub.cargo = convertToKgs(tonumber(freight_added[1]))
     else
         toLoadHub.is_lbs = false
-        toLoadHub.unitLabel = "KGS"
-        toLoadHub.unitTLabel = "T"
         toLoadHub.cargo = tonumber(freight_added[1])
     end
-
+    setIsLib()
     toLoadHub.simbrief.cargo = toLoadHub.cargo
 
     debug(string.format("[%s] SimBrief XML downloaded and parsed.", toLoadHub.title))
@@ -414,7 +421,7 @@ local function resetAirplaneParameters()
     if not toLoadHub.first_init and toLoadHub.settings.simbrief.auto_fetch then
         fetchSimbriefFPlan()
     end
-    toLoadHub.is_lbs = false
+    toLoadHub.is_lbs = toLoadHub.settings.general.is_lbs
     toLoadHub.unitLabel = "KGS"
     toLoadHub.unitTLabel = "T"
     toLoadHub.first_init = true
@@ -422,6 +429,7 @@ local function resetAirplaneParameters()
     toLoadHub_AftCargo_XP = 0
     toLoadHub_FwdCargo_XP = 0
     toLoadHub_PaxDistrib_XP = 0.5
+    setIsLib()
     command_once("AirbusFBW/SetWeightAndCG")
 
     debug(string.format("[%s] Reset parameters done", toLoadHub.title))
@@ -1045,6 +1053,20 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
     if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
 
+    changed, newval = imgui.Checkbox("Use Imperial Units", toLoadHub.settings.general.is_lbs)
+    if changed then toLoadHub.settings.general.is_lbs , setSave = newval, true end
+    if toLoadHub.simbrief.units == nil then
+        toLoadHub.is_lbs = toLoadHub.settings.general.is_lbs
+        setIsLib()
+    end
+
+    imgui.SetWindowFontScale(0.8)
+    imgui.TextUnformatted("SimBrief has priority over this value.")
+    imgui.TextUnformatted("- If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.")
+    imgui.TextUnformatted("- If SimBrief plan is set to POUNDS, the units are imperial.")
+    imgui.SetWindowFontScale(1.0)
+    imgui.Spacing()
+
     if XPLMFindCommand("jd/ghd/driveup") ~= nil and XPLMFindCommand("jd/ghd/driveavay") ~= nil then
         changed, newval = imgui.Checkbox("Auto Start and Stop JD Ground Hanling", toLoadHub.settings.general.simulate_jdgh)
         if changed then toLoadHub.settings.general.simulate_jdgh , setSave = newval, true end
@@ -1462,6 +1484,7 @@ readSettingsToFile()
 if toLoadHub.settings.general.auto_init then
     resetAirplaneParameters()
 end
+
 if toLoadHub.settings.simbrief.auto_fetch then
     fetchSimbriefFPlan()
 end
