@@ -230,7 +230,7 @@ local function readSettingsToFile()
             end
         end
     end
-endF
+end
 
 local function divideCargoFwdAft()
     local randomPercentage = math.random(toLoadHub.cargo_fwd_distribution_range[1], toLoadHub.cargo_fwd_distribution_range[2]) / 100
@@ -456,7 +456,6 @@ end
 
 local function openDoors(boarding)
     local setVal = boarding and toLoadHub.settings.door.open_boarding or toLoadHub.settings.door.open_deboarding
-    if setVal <= 0 then return end
     toLoadHub_Doors_1 = 2
     if setVal > 1 then
         toLoadHub_Doors_2 = 2
@@ -480,11 +479,13 @@ end
 local function closeDoorsCargo()
     toLoadHub_CargoDoors_1 = 0
     toLoadHub_CargoDoors_2 = 0
+    toLoadHub_CargoDoors_3 = 0
 end
 
 local function openDoorsCargo()
     toLoadHub_CargoDoors_1 = 2
     toLoadHub_CargoDoors_2 = 2
+    toLoadHub_CargoDoors_3 = 2
 end
 
 local function openDoorsCatering()
@@ -546,11 +547,12 @@ local function sendLoadsheetToToliss(data)
     if toLoadHub.hoppie.loadsheet_check > os.time() or toLoadHub.hoppie.loadsheet_sending then return end
     debug(string.format("[%s] Starting Loadsheet %s composition.", toLoadHub.title, data.labelText))
 
-    if not toLoadHub.settings.hoppie.secret or toLoadHub.settings.hoppie.secret == nil or not toLoadHub.settings.hoppie.secret:gsub("^%s*(.-)%s*$", "%1") then
+    if not toLoadHub.settings.hoppie.secret or toLoadHub.settings.hoppie.secret == nil or toLoadHub.settings.hoppie.secret:gsub("^%s*(.-)%s*$", "%1") == "" then
         toLoadHub.error_message = "Hoppie secret not set."
         debug(string.format("[%s] Hoppie secret not set.", toLoadHub.title))
         return false
     end
+
     toLoadHub.hoppie.loadsheet_sending = true
 
     local loadSheetContent = "/data2/313//NE/" .. table.concat({
@@ -677,6 +679,7 @@ function viewToLoadHubWindow()
                 imgui.Spacing()
 
                 if imgui.Button("Start Boarding") then
+                    openDoors(true)
                     toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
                     toLoadHub.next_boarding_check = os.time()
                     toLoadHub.next_cargo_check = os.time()
@@ -785,6 +788,7 @@ function viewToLoadHubWindow()
         if (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
            (toLoadHub_Doors_6 and toLoadHub_Doors_6 >1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
             if imgui.Button("Start Deboarding") then
+                openDoors(false)
                 toLoadHub.phases.is_deboarding = true
                 toLoadHub.next_boarding_check = os.time()
                 toLoadHub.next_cargo_check = os.time()
@@ -1357,6 +1361,7 @@ dataref("toLoadHub_Doors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 2)
 dataref("toLoadHub_Doors_6", "AirbusFBW/PaxDoorModeArray", "writeable", 6)
 dataref("toLoadHub_CargoDoors_1", "AirbusFBW/CargoDoorModeArray", "writeable", 0)
 dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1)
+dataref("toLoadHub_CargoDoors_3", "AirbusFBW/CargoDoorModeArray", "writeable", 2)
 dataref("toLoadHub_CateringDoors_1", "AirbusFBW/PaxDoorModeArray", "writeable", 1)
 dataref("toLoadHub_CateringDoors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 3)
 
