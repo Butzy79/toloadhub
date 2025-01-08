@@ -514,11 +514,11 @@ end
 local function addingCargoFwdAft()
     local someChanges = false
     if toLoadHub_AftCargo < toLoadHub.cargo_aft then
-        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + toLoadHub.kgPerUnit, toLoadHub.cargo_aft)
+        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + (toLoadHub.kgPerUnit /2), toLoadHub.cargo_aft)
         someChanges = true
     end
     if toLoadHub_FwdCargo < toLoadHub.cargo_fwd then
-        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + toLoadHub.kgPerUnit, toLoadHub.cargo_fwd)
+        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + (toLoadHub.kgPerUnit /2), toLoadHub.cargo_fwd)
         someChanges = true
     end
     return someChanges
