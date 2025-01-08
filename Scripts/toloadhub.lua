@@ -23,8 +23,8 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.10.3.1",
-    file = "toloadhub.ini",
+    version = "0.11.0",
+    file = "toloadhub.ini" ,
     visible_main = false,
     visible_settings = false,
     pax_count = 0, -- old intendedPassengerNumber
@@ -151,7 +151,7 @@ local loadsheetStructure = {
 local toloadhub_window = nil
 
 local urls = {
-    simbrief_fplan = "http://www.simbrief.com/api/xml.fetcher.php?userid=",
+    simbrief_fplan_id = "http://www.simbrief.com/api/xml.fetcher.php?userid=",
     simbrief_fplan_user = "http://www.simbrief.com/api/xml.fetcher.php?username=",
     hoppie_connect = "https://www.hoppie.nl/acars/system/connect.html"
 }
@@ -230,7 +230,7 @@ local function readSettingsToFile()
             end
         end
     end
-end
+endF
 
 local function divideCargoFwdAft()
     local randomPercentage = math.random(toLoadHub.cargo_fwd_distribution_range[1], toLoadHub.cargo_fwd_distribution_range[2]) / 100
@@ -240,19 +240,13 @@ local function divideCargoFwdAft()
 end
 
 local function fetchSimbriefFPlan()
-    local url = ""
-    if toLoadHub_simBriefID and toLoadHub_simBriefID ~= nil and toLoadHub_simBriefID:gsub("^%s*(.-)%s*$", "%1") ~= "" then
-        url = urls.simbrief_fplan .. toLoadHub_simBriefID
-    else
-        if not toLoadHub.settings.simbrief.username or toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") == "" then
-            toLoadHub.error_message = "Simbrief username not set."
-            debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
-            return false
-        end
-        url = urls.simbrief_fplan_user .. toLoadHub.settings.simbrief.username
+    if not toLoadHub.settings.simbrief.username or toLoadHub.settings.simbrief.username:gsub("^%s*(.-)%s*$", "%1") == "" then
+        toLoadHub.error_message = "Simbrief username not set."
+        debug(string.format("[%s] SimBrief username not set.", toLoadHub.title))
+        return false
     end
 
-    local response_xml, statusCode = http.request(url)
+    local response_xml, statusCode = http.request(urls.simbrief_fplan_user .. toLoadHub.settings.simbrief.username)
 
     if statusCode ~= 200 then
         toLoadHub.error_message = "Simbrief error, please try again."
@@ -552,7 +546,7 @@ local function sendLoadsheetToToliss(data)
     if toLoadHub.hoppie.loadsheet_check > os.time() or toLoadHub.hoppie.loadsheet_sending then return end
     debug(string.format("[%s] Starting Loadsheet %s composition.", toLoadHub.title, data.labelText))
 
-    if not toLoadHub_hoppieLogon or toLoadHub_hoppieLogon == nil or not toLoadHub_hoppieLogon:gsub("^%s*(.-)%s*$", "%1") then
+    if not toLoadHub.settings.hoppie.secret or toLoadHub.settings.hoppie.secret == nil or not toLoadHub.settings.hoppie.secret:gsub("^%s*(.-)%s*$", "%1") then
         toLoadHub.error_message = "Hoppie secret not set."
         debug(string.format("[%s] Hoppie secret not set.", toLoadHub.title))
         return false
@@ -573,7 +567,7 @@ local function sendLoadsheetToToliss(data)
     debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(data.flt_no)))
 
     local payload = string.format("logon=%s&from=%s&to=%s&type=%s&packet=%s",
-        toLoadHub_hoppieLogon,
+        toLoadHub.settings.hoppie.secret,
         toLoadHub.title,
         data.flt_no,
         'cpdlc', 
@@ -1386,18 +1380,6 @@ elseif XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
     dataref("toLoadHub_zfwCG", "toliss_airbus/init/ZFWCG", "readonly")
 else
     toLoadHub_zfwCG = nil
-end
-
-if XPLMFindDataRef("toliss_airbus/iscsinterface/simBriefID") then
-    dataref("toLoadHub_simBriefID", "toliss_airbus/iscsinterface/simBriefID", "readonly")
-else
-    toLoadHub_simBriefID = nil
-end
-
-if XPLMFindDataRef("toliss_airbus/iscsinterface/hoppieLogon") then
-    dataref("toLoadHub_hoppieLogon", "toliss_airbus/iscsinterface/hoppieLogon", "readonly")
-else
-    toLoadHub_hoppieLogon = nil
 end
 
 if XPLMFindDataRef("toliss_airbus/iscsinterface/blockZfwCG") then
