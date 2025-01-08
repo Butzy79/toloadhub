@@ -97,6 +97,7 @@ local toLoadHub = {
         cargo = nil,
         pax_count = nil,
         est_zfw = nil,
+        units = nil,
     },
     settings = {
         general = {
@@ -175,6 +176,14 @@ require("LuaXml")
 math.randomseed(os.time())
 
 -- == Helper Functions ==
+local function convertToKgs(value)
+    return value / 2.205
+end
+
+local function convertToLbs(value)
+    return value * 2.205
+end
+
 local function debug(stringToLog)
     if toLoadHub.settings.general.debug then
         logMsg(stringToLog)
@@ -274,8 +283,6 @@ local function fetchSimbriefFPlan()
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
     end
 
-    local freight_added = xml_data:find("freight_added")
-    toLoadHub.cargo = tonumber(freight_added[1])
 
     local plan_ramp = xml_data:find("plan_ramp")
     toLoadHub.simbrief.plan_ramp = tonumber(plan_ramp[1])
@@ -289,8 +296,19 @@ local function fetchSimbriefFPlan()
     local est_zfw = xml_data:find("est_zfw")
     toLoadHub.simbrief.est_zfw = tonumber(est_zfw[1])
 
-    toLoadHub.simbrief.cargo = toLoadHub.cargo
+    local units = xml_data:find("units")
+    toLoadHub.simbrief.units = tonumber(units[1])
     
+    local freight_added = xml_data:find("freight_added")
+
+    if string.lower(toLoadHub.simbrief.units) == 'lbs' then
+        toLoadHub.cargo = convertToKgs(tonumber(freight_added[1]))
+    else
+        toLoadHub.cargo = tonumber(freight_added[1])
+    end
+
+    toLoadHub.simbrief.cargo = toLoadHub.cargo
+
     debug(string.format("[%s] SimBrief XML downloaded and parsed.", toLoadHub.title))
 end
 
@@ -658,7 +676,7 @@ function viewToLoadHubWindow()
             toLoadHub.pax_count = newPassengerNumber
         end
 
-        local cargoNumberChanged, newCargoNumber = imgui.SliderInt("Cargo KG", toLoadHub.cargo, 0, toLoadHub.max_cargo_aft + toLoadHub.max_cargo_aft, "Value: %d")
+        local cargoNumberChanged, newCargoNumber = imgui.SliderInt("Cargo KGS", toLoadHub.cargo, 0, toLoadHub.max_cargo_aft + toLoadHub.max_cargo_aft, "Value: %d")
         if cargoNumberChanged then
             toLoadHub.cargo = newCargoNumber
         end
