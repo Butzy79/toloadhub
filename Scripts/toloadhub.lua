@@ -42,6 +42,9 @@ local toLoadHub = {
     cargo_speeds = {0, 10, 13},
     kgPerUnit = 25,
     first_init = false,
+    is_lbs = false,
+    unitLabel = "KGS",
+    unitTLabel = "T",
     phases = {
         is_ready_to_start = false,
         is_gh_started = false,
@@ -184,6 +187,23 @@ local function convertToLbs(value)
     return value * 2.205
 end
 
+
+local function writeInUnitLbs(value)
+    if toLoadHub.is_lbs then
+        return convertToKgs(value)
+    else
+        return value
+    end
+end
+
+local function writeInUnitKg(value)
+    if toLoadHub.is_lbs then
+        return convertToLbs(value)
+    else
+        return value
+    end
+end
+
 local function debug(stringToLog)
     if toLoadHub.settings.general.debug then
         logMsg(stringToLog)
@@ -283,10 +303,6 @@ local function fetchSimbriefFPlan()
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
     end
 
-
-    local plan_ramp = xml_data:find("plan_ramp")
-    toLoadHub.simbrief.plan_ramp = tonumber(plan_ramp[1])
-
     local callsign = xml_data:find("callsign")
     toLoadHub.simbrief.callsign = callsign[1]
 
@@ -297,13 +313,21 @@ local function fetchSimbriefFPlan()
     toLoadHub.simbrief.est_zfw = tonumber(est_zfw[1])
 
     local units = xml_data:find("units")
-    toLoadHub.simbrief.units = tonumber(units[1])
+    toLoadHub.simbrief.units = tostring(units[1])
     
-    local freight_added = xml_data:find("freight_added")
+    local plan_ramp = xml_data:find("plan_ramp")
+    toLoadHub.simbrief.plan_ramp = tonumber(plan_ramp[1])
 
-    if string.lower(toLoadHub.simbrief.units) == 'lbs' then
+    local freight_added = xml_data:find("freight_added")
+    if toLoadHub.simbrief.units:lower() == 'lbs' then
+        toLoadHub.is_lbs = true
+        toLoadHub.unitLabel = "LBS"
+        toLoadHub.unitTLabel = "kip"
         toLoadHub.cargo = convertToKgs(tonumber(freight_added[1]))
     else
+        toLoadHub.is_lbs = false
+        toLoadHub.unitLabel = "KGS"
+        toLoadHub.unitTLabel = "T"
         toLoadHub.cargo = tonumber(freight_added[1])
     end
 
@@ -390,6 +414,9 @@ local function resetAirplaneParameters()
     if not toLoadHub.first_init and toLoadHub.settings.simbrief.auto_fetch then
         fetchSimbriefFPlan()
     end
+    toLoadHub.is_lbs = false
+    toLoadHub.unitLabel = "KGS"
+    toLoadHub.unitTLabel = "T"
     toLoadHub.first_init = true
     toLoadHub_NoPax_XP = 0
     toLoadHub_AftCargo_XP = 0
@@ -675,10 +702,9 @@ function viewToLoadHubWindow()
         if passengeraNumberChanged then
             toLoadHub.pax_count = newPassengerNumber
         end
-
-        local cargoNumberChanged, newCargoNumber = imgui.SliderInt("Cargo KGS", toLoadHub.cargo, 0, toLoadHub.max_cargo_aft + toLoadHub.max_cargo_aft, "Value: %d")
+        local cargoNumberChanged, newCargoNumber = imgui.SliderInt("Cargo " .. toLoadHub.unitLabel, writeInUnitKg(toLoadHub.cargo), 0, writeInUnitKg(toLoadHub.max_cargo_aft + toLoadHub.max_cargo_aft), "Value: %d")
         if cargoNumberChanged then
-            toLoadHub.cargo = newCargoNumber
+            toLoadHub.cargo = writeInUnitLbs(newCargoNumber)
         end
 
 
@@ -744,10 +770,10 @@ function viewToLoadHubWindow()
                 imgui.TextUnformatted(string.format("Cargo in progress:"))
                 imgui.Spacing()
                 imgui.SameLine(50)
-                imgui.TextUnformatted(string.format("FWD %.2f T / %.2f T loaded", toLoadHub_FwdCargo / 1000, toLoadHub.cargo_fwd / 1000))
+                imgui.TextUnformatted(string.format("FWD %.2f %s / %.2f %s loaded", writeInUnitKg(toLoadHub_FwdCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_fwd) / 1000, toLoadHub.unitTLabel))
                 imgui.Spacing()
                 imgui.SameLine(50)
-                imgui.TextUnformatted(string.format("AFT %.2f T / %.2f T loaded", toLoadHub_AftCargo / 1000, toLoadHub.cargo_aft / 1000))
+                imgui.TextUnformatted(string.format("AFT %.2f %s / %.2f %s loaded", writeInUnitKg(toLoadHub_AftCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_aft) / 1000, toLoadHub.unitTLabel))
                 imgui.PopStyleColor()
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
@@ -756,7 +782,7 @@ function viewToLoadHubWindow()
             end
         elseif toLoadHub.cargo > 0 and toLoadHub.phases.is_cargo_onboarded then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
-            imgui.TextUnformatted(string.format("Cargo loaded %.2f T", (toLoadHub_AftCargo + toLoadHub_FwdCargo) / 1000 ))
+            imgui.TextUnformatted(string.format("Cargo loaded %.2f %s", writeInUnitKg((toLoadHub_AftCargo + toLoadHub_FwdCargo) / 1000), toLoadHub.unitTLabel ))
             imgui.PopStyleColor()
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
@@ -776,7 +802,7 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("Remaining passengers to board: %s / %s", toLoadHub.pax_count-math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
         end
         if toLoadHub.cargo > 0 and not toLoadHub.phases.is_cargo_onboarded then
-            imgui.TextUnformatted(string.format("Remaining cargo to load: %.2f T / %.2f T", (toLoadHub.cargo - (toLoadHub_FwdCargo + toLoadHub_AftCargo)) / 1000, toLoadHub.cargo / 1000))
+            imgui.TextUnformatted(string.format("Remaining cargo to load: %.2f %s / %.2f %s", writeInUnitKg((toLoadHub.cargo - (toLoadHub_FwdCargo + toLoadHub_AftCargo))) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo) / 1000, toLoadHub.unitTLabel))
         end
         imgui.PopStyleColor()
         if imgui.Button("Resume Boarding") then
@@ -799,7 +825,7 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("Passenger boarded %s", toLoadHub_NoPax))
         end
         if toLoadHub.cargo > 0 then
-            imgui.TextUnformatted(string.format("Cargo loaded %.2f T", (toLoadHub_AftCargo + toLoadHub_FwdCargo) / 1000 ))
+            imgui.TextUnformatted(string.format("Cargo loaded %.2f %s", writeInUnitKg((toLoadHub_AftCargo + toLoadHub_FwdCargo)) / 1000, toLoadHub.unitTLabel))
         end
         imgui.PopStyleColor()
 
@@ -850,10 +876,10 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("Cargo offloading in progress:"))
             imgui.Spacing()
             imgui.SameLine(50)
-            imgui.TextUnformatted(string.format("FWD %.2f T / %.2f T offloaded", (toLoadHub.cargo_fwd - toLoadHub_FwdCargo) / 1000, toLoadHub.cargo_fwd / 1000))
+            imgui.TextUnformatted(string.format("FWD %.2f %s / %.2f %s offloaded", writeInUnitKg(toLoadHub.cargo_fwd - toLoadHub_FwdCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_fwd) / 1000, toLoadHub.unitTLabel))
             imgui.Spacing()
             imgui.SameLine(50)
-            imgui.TextUnformatted(string.format("AFT %.2f T / %.2f T offloaded", (toLoadHub.cargo_aft - toLoadHub_AftCargo) / 1000, toLoadHub.cargo_aft / 1000))
+            imgui.TextUnformatted(string.format("AFT %.2f %s / %.2f %s offloaded", writeInUnitKg(toLoadHub.cargo_aft - toLoadHub_AftCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_aft) / 1000, toLoadHub.unitTLabel))
             imgui.PopStyleColor()
         elseif toLoadHub_FwdCargo + toLoadHub_AftCargo == 0 and toLoadHub.phases.is_cargo_deboarded then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
@@ -876,7 +902,7 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("Remaining passengers to deboard: %s / %s", toLoadHub_NoPax, toLoadHub.pax_count))
         end
         if toLoadHub_FwdCargo + toLoadHub_AftCargo > 0 then
-            imgui.TextUnformatted(string.format("Remaining cargo to offload: %.2f T / %.2f T", (toLoadHub_FwdCargo + toLoadHub_AftCargo) / 1000, toLoadHub.cargo / 1000))
+            imgui.TextUnformatted(string.format("Remaining cargo to offload: %.2f %s / %.2f %s", writeInUnitKg(toLoadHub_FwdCargo + toLoadHub_AftCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo) / 1000, toLoadHub.unitTLabel))
         end
         imgui.PopStyleColor()
         if imgui.Button("Resume Deboarding") then
@@ -1322,9 +1348,9 @@ function toloadHubMainLoop()
         data_f.labelText = "@Final@"
         data_f.flt_no = toLoadHub_flight_no
         if toLoadHub_zfw == nil then
-            data_f.zfw = string.format("%.1f",(toLoadHub_m_total - toLoadHub_m_fuel_total)/1000)
+            data_f.zfw = string.format("%.1f", writeInUnitKg(toLoadHub_m_total - toLoadHub_m_fuel_total)/1000)
         else
-            data_f.zfw = string.format("%.1f",toLoadHub_zfw/1000)
+            data_f.zfw = string.format("%.1f", writeInUnitKg(toLoadHub_zfw)/1000)
         end
         if toLoadHub_zfwCG == nil then
             data_f.zfwcg = "--.-"
@@ -1332,8 +1358,8 @@ function toloadHubMainLoop()
             data_f.zfwcg = string.format("%.1f",toLoadHub_zfwCG)
         end
         data_f.gwcg = string.format("%.1f",toLoadHub_currentCG)
-        data_f.f_blk = string.format("%.1f",toLoadHub_WriteFOB_XP/1000)
-        if toLoadHub_WriteFOB_XP + 20 < toLoadHub.simbrief.plan_ramp then
+        data_f.f_blk = string.format("%.1f",writeInUnitKg(toLoadHub_WriteFOB_XP)/1000)
+        if toLoadHub.simbrief.plan_ramp ~= nil and writeInUnitKg(toLoadHub_WriteFOB_XP) + 20 < toLoadHub.simbrief.plan_ramp then
             data_f.warning = string.format("%.1f",toLoadHub.simbrief.plan_ramp/1000)
         end
         sendLoadsheetToToliss(data_f)
