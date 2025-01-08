@@ -21,16 +21,17 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 ### General Settings  
 - **Auto Open ToLoad Hub Window**: Automatically opens the ToLoad Hub window upon simulator launch if the aircraft is compatible.  
 - **Automatically Initialize Airplane**: Automatically sets the aircraft values to zero on simulator startup.  
-- **Simulate Cargo**: If enabled, cargo loading/unloading is simulated; otherwise, it is loaded instantly.  
+- **Simulate Cargo**: If enabled, cargo loading/unloading is simulated; otherwise, it is loaded instantly.
+- **Use Imperial Units**: Set Imperial units. SimBrief has priority over this value. If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.
 - **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
 - **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.  
 ### SimBrief Settings  
-- **Username** (not needed for A320neo): Your SimBrief username.
+- **Username**: Your SimBrief username.
 - **Auto Fetch at Beginning**: Automatically fetches data from SimBrief when the plugin loads.  
 - **Randomize Passenger**: Simulates real passenger variations based on SimBrief data. For example, if SimBrief indicates 100 passengers, some may not board, or extra passengers may be simulated.  
 
 ### Hoppie Settings
-- **Secret** (not needed for A320neo): The password or secret received during registration at [hoppie.nl](https://www.hoppie.nl).
+- **Secret**: The password or secret received during registration at [hoppie.nl](https://www.hoppie.nl).
 - **Enable Loadsheet**: Activates the sending of the loadsheet for display in the MCDU.  
   - The loadsheet is also visible in the **ATC MENU** under **MSG RECORD**.
 - **Preliminary Loadsheet Only for Long-haul (+7hrs)**: Sends a preliminary loadsheet if a valid SimBrief plan exists, the flight number matches between SimBrief and the MCDU, and this option is enabled. The preliminary loadsheet can also be sent for all flights if not enabled.  
@@ -40,7 +41,6 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Close Doors after Deboarding**: Automatically closes doors after deboarding is completed.  
 - **Auto Open Doors before Boarding**: Automatically opens doors for boarding if closed. You have the option to choose **No**, **Front Door Only**, or **All Doors**.  
 - **Auto Open Doors before Deboarding**: Automatically opens doors for deboarding if closed. You have the option to choose **No**, **Front Door Only**, or **All Doors**.  
-
 
 ## Installation
 1. Download the plugin files from this repository.  

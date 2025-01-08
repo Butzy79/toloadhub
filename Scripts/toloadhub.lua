@@ -1062,7 +1062,7 @@ function viewToLoadHubWindowSettings()
 
     imgui.SetWindowFontScale(0.8)
     imgui.TextUnformatted("SimBrief has priority over this value.")
-    imgui.TextUnformatted("- If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.")
+    imgui.TextUnformatted("- If SimBrief plan is set to KGS, the units are metric.")
     imgui.TextUnformatted("- If SimBrief plan is set to POUNDS, the units are imperial.")
     imgui.SetWindowFontScale(1.0)
     imgui.Spacing()
