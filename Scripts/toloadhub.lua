@@ -518,6 +518,27 @@ local function playFinalSound()
     toLoadHub.full_deboard_sound = true
 end
 
+local function isAnyDoorOpen()
+    return (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or
+           (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
+           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and
+            (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339"))
+end
+
+local function allDoorsOpen()
+    return (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) and ((toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
+           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and
+             (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")))
+end
+
+local function areAllDoorsClosed()
+    if PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339" then
+        return toLoadHub_Doors_6 == 0 and toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 == 0
+    else
+        return toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 == 0
+    end
+end
+
 local function openDoors(boarding)
     local setVal = boarding and toLoadHub.settings.door.open_boarding or toLoadHub.settings.door.open_deboarding
     toLoadHub_Doors_1 = 2
@@ -736,20 +757,11 @@ function viewToLoadHubWindow()
         end
 
         if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) then
-            if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
-               (toLoadHub_Doors_6 and toLoadHub_Doors_6 >1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
+            if isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0 then
                 imgui.Separator()
                 imgui.Spacing()
 
-                if imgui.Button("Start Boarding") then
-                    openDoors(true)
-                    toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
-                    toLoadHub.next_boarding_check = os.time()
-                    toLoadHub.next_cargo_check = os.time()
-                    toLoadHub.phases.is_onboarding = true
-                end
-            elseif toLoadHub.settings.door.open_boarding > 0 then
-                if imgui.Button("Start Boarding (Auto Open Doors)") then
+                if imgui.Button("Start Boarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
                     openDoors(true)
                     toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
                     toLoadHub.next_boarding_check = os.time()
@@ -848,22 +860,14 @@ function viewToLoadHubWindow()
         end
         imgui.PopStyleColor()
 
-        if (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
-           (toLoadHub_Doors_6 and toLoadHub_Doors_6 >1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
-            if imgui.Button("Start Deboarding") then
+        if isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0 then
+            if imgui.Button("Start Deboarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
                 openDoors(false)
                 toLoadHub.phases.is_deboarding = true
                 toLoadHub.next_boarding_check = os.time()
                 toLoadHub.next_cargo_check = os.time()
             end
             imgui.SameLine(200)
-        elseif toLoadHub.settings.door.open_deboarding > 0 then
-            if imgui.Button("Start Deboarding (Auto Open Doors)") then
-                openDoors(false)
-                toLoadHub.phases.is_deboarding = true
-                toLoadHub.next_boarding_check = os.time()
-                toLoadHub.next_cargo_check = os.time()
-            end
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted("Open the doors to start the deboarding.")
@@ -953,33 +957,22 @@ function viewToLoadHubWindow()
        (toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarded and (not toLoadHub.phases.is_deboarding or toLoadHub.phases.is_deboarding_pause))) then
         local generalSpeed = 3
 
-        if (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) and ((toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
-           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339"))) then
+        if allDoorsOpen() then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("Both doors are open and in use.")
             imgui.PopStyleColor()
             generalSpeed = 2
-        end
-
-        if generalSpeed == 3 and 
-           ((toLoadHub_Doors_1 and toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 and toLoadHub_Doors_2 == 0 and 
-            (toLoadHub.settings.door.open_boarding > 1 and not toLoadHub.phases.is_onboarded) or 
-            (toLoadHub.settings.door.open_deboarding > 1 and toLoadHub.phases.is_onboarded)
-           ) or 
-           (toLoadHub_Doors_6 and toLoadHub_Doors_6 == 0 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339") and
-            (toLoadHub.settings.door.open_boarding > 1 and not toLoadHub.phases.is_onboarded) or 
-            (toLoadHub.settings.door.open_deboarding > 1 and toLoadHub.phases.is_onboarded)
-           )) then
+        elseif areAllDoorsClosed() and
+            ((toLoadHub.settings.door.open_boarding > 1 and not toLoadHub.phases.is_onboarded) or
+            (toLoadHub.settings.door.open_deboarding > 1 and toLoadHub.phases.is_onboarded)) then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("All passenger doors will be operated.")
             imgui.PopStyleColor()
             generalSpeed = 2
         end
 
-        if (toLoadHub.settings.door.open_boarding and not toLoadHub.phases.is_onboarded) or
-           (toLoadHub.settings.door.open_deboarding and toLoadHub.phases.is_onboarded) or
-           (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
-           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
+        if isAnyDoorOpen() and (toLoadHub.settings.door.open_boarding and not toLoadHub.phases.is_onboarded) or
+           (toLoadHub.settings.door.open_deboarding and toLoadHub.phases.is_onboarded) then
             local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
             local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
             if toLoadHub.settings.general.simulate_cargo then
