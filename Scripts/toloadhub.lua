@@ -34,7 +34,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.11.0",
+    version = "0.11.1",
     file = "toloadhub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -1124,8 +1124,7 @@ function viewToLoadHubWindowSettings()
     imgui.SetWindowFontScale(0.8)
     imgui.TextUnformatted("The secret can be found by registering at:")
     imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFEBCE87)
-    imgui.SetNextItemWidth(280)
-    imgui.InputText("##link", "https://www.hoppie.nl/acars/system/register.html", 48, imgui.constant.InputTextFlags.ReadOnly)
+    imgui.TextUnformatted("https://www.hoppie.nl/acars/system/register.html")
     imgui.PopStyleColor()
     imgui.TextUnformatted("received via email and used as your logon code.")
     imgui.SetWindowFontScale(1.0)
