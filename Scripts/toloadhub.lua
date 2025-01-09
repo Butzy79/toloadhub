@@ -91,10 +91,15 @@ local toLoadHub = {
     deboarding_cargo_sound_played = false,
     setWeightCommand = false,
     full_deboard_sound = false,
+    is_onground = true,
     chocks_off_time = os.date("%H:%M:%S"),
     chocks_on_time = os.date("%H:%M:%S"),
+    chocks_out_time = os.date("%H:%M:%S"),
+    chocks_in_time = os.date("%H:%M:%S"),
     chocks_off_set = false,
     chocks_on_set = false,
+    chocks_out_set = false,
+    chocks_in_set = false,
     hoppie = {
         loadsheet_sent = false,
         loadsheet_sending = false,
@@ -418,8 +423,12 @@ local function resetAirplaneParameters()
     toLoadHub.next_ready_to_start_check = os.time()
     toLoadHub.chocks_off_time = os.date("%H:%M:%S")
     toLoadHub.chocks_on_time = os.date("%H:%M:%S")
+    toLoadHub.chocks_out_time = os.date("%H:%M:%S")
+    toLoadHub.chocks_in_time = os.date("%H:%M:%S")
     toLoadHub.chocks_off_set = false
     toLoadHub.chocks_on_set = false
+    toLoadHub.chocks_out_set = false
+    toLoadHub.chocks_in_set = false
     toLoadHub.what_to_speak = nil
     toLoadHub.is_jetbridge = false
     toLoadHub.boarding_sound_played = false
@@ -427,6 +436,7 @@ local function resetAirplaneParameters()
     toLoadHub.boarding_cargo_sound_played = false
     toLoadHub.deboarding_cargo_sound_played = false
     toLoadHub.full_deboard_sound = false
+    toLoadHub.is_onground = true
     toLoadHub.error_message = nil
     for key in pairs(toLoadHub.hoppie) do
         if key == "loadsheet_check" then
@@ -670,13 +680,15 @@ local function sendLoadsheetToToliss(data)
         end
     elseif data.typeL == 2 then
         loadSheetContent = "/data2/323//NE/" .. table.concat({
-            "Loadsheet " .. data.labelText .. " " .. os.date("%H:%M"),
-            data.flt_no .. " Chocks Off time " .. toLoadHub.chocks_off_time
+            "ACTUAL TIMES " .. os.date("%H:%M"),
+            "OUT time " .. toLoadHub.chocks_out_time,
+            "OFF time " .. toLoadHub.chocks_off_time
         }, "\n")
     elseif data.typeL == 3 then
         loadSheetContent = "/data2/333//NE/" .. table.concat({
-            "Loadsheet " .. data.labelText .. " " .. os.date("%H:%M"),
-            data.flt_no .. " Chocks On time " .. toLoadHub.chocks_on_time
+            "ACTUAL TIMES ARRIVAL " .. os.date("%H:%M"),
+            "ON time " .. toLoadHub.chocks_on_time,
+            "IN time " .. toLoadHub.chocks_in_time
         }, "\n")
     end
 
@@ -1360,16 +1372,32 @@ function toloadHubMainLoop()
     -- Chocks Off and On
     if toLoadHub.settings.hoppie.chocks_loadsheet then
          -- Beacon for Chock Off Loadsheet --
-        if not toLoadHub.chocks_off_set and toLoadHub_beacon_lights_on then
+        if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on and toLoadHub_parking_brake_ratio <=0.1 then
+            toLoadHub.chocks_out_set = true
+            toLoadHub.chocks_out_time = os.date("%H:%M:%S")
+            toLoadHub.hoppie.loadsheet_check = os.time() + 1
+        end
+        -- Take Off for Chock Off Loadsheet --
+        if not toLoadHub.chocks_off_set and toLoadHub.is_onground and toLoadHub_onground_any < 1  then
+            toLoadHub.is_onground = false
             toLoadHub.chocks_off_set = true
             toLoadHub.chocks_off_time = os.date("%H:%M:%S")
             toLoadHub.hoppie.loadsheet_check = os.time() + 1
         end
-        -- Engine Off for Chock On Loadsheet --
-        if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_on_set and isAllEngineOff() then
+
+        -- Landing for Chock On Loadsheet --
+        if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_on_set and not toLoadHub.is_onground and toLoadHub_onground_any >= 1 then
+            toLoadHub.is_onground = true
             toLoadHub.chocks_on_set = true
             toLoadHub.chocks_on_time = os.date("%H:%M:%S")
-            toLoadHub.hoppie.loadsheet_check = os.time() + 90
+            toLoadHub.hoppie.loadsheet_check = os.time() + 60
+        end
+
+        -- Engine Off for Chock On Loadsheet --
+        if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_in_set and not toLoadHub_beacon_lights_on and isAllEngineOff() then
+            toLoadHub.chocks_in_set = true
+            toLoadHub.chocks_in_time = os.date("%H:%M:%S")
+            toLoadHub.hoppie.loadsheet_check = os.time() + 60
         end
 
         -- Altitude Chock Off Loadsheet --
@@ -1558,6 +1586,8 @@ dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
 
 datared("toLoadHub_pressure_altitude", "sim/flightmodel2/position/pressure_altitude", "readonly")
 datared("toLoadHub_beacon_lights_on", "sim/cockpit/electrical/beacon_lights_on", "readonly")
+datared("toLoadHub_parking_brake_ratio", "sim/cockpit2/controls/parking_brake_ratio", "readonly")
+datared("toLoadHub_onground_any", "sim/flightmodel/failures/onground_any", "readonly")
 
 if XPLMFindDataRef("jd/ghd/execute") then
     dataref("toloadHub_jdexe","jd/ghd/execute", "writeable")
