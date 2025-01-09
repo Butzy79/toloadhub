@@ -10,6 +10,17 @@
     Features include automatic loading from SimBrief, random passenger generation, and real-time loading.
 
     TODO: Missing max Fuel and Cargo for A339 and A346
+    TODO: DOORS:
+    Clicca se DOOR sempe e solo manuali se no:
+    Before staqrt se:
+    Airstair vs Jetbridg
+    Airstair:
+    A319 A20N A321 A21N:COme ora, selezioni o L1 o L4 IN DEBOARDING NEVER L4
+    A346 and A339: L1, L2, L4 door should open. (capire se la l2 che indice ha) da opzioni preselezionare se L1 e L4 e anche L2 (la 6??)
+
+    Jetbridg:
+    A319 A20N A321 A21N: SEMPRE e solo L1 anche per DEBOARDIN
+    A346 and A339: Dare una opzione che mostra L1, L2 e L4 e selzioni quello che vuoi.
     License: MIT License
 --]]
 
