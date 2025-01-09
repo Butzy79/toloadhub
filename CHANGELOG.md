@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.  
 The format is based on [Keep a Changelog](https://keepachangelog.com/),  
 and this project adheres to [Semantic Versioning](https://semver.org/).
+## [0.12.0]- 2025-01-10
+### Added
+- Airstair / Jetbridge selection on boarding/deboarding
+- CPDLC Message for Chocks Off and Chocks On
+
+### Bugfix
+- ZFWCG wrong dataref set
+- Settings Menu macOS fixed
 
 ## [0.11.0]- 2025-01-08
 ### Added
