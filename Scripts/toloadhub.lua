@@ -371,9 +371,8 @@ end
 local function isAllEngineOff()
     local engine = dataref_table("sim/flightmodel/engine/ENGN_running")
     local all_zero = true
-
-    for _, value in ipairs(engine) do
-        if value > 0 then engine = false; break end
+    if engine[0] == 1 or engine[1] == 1 or engine[2] == 1 or engine[3] == 1 then
+        all_zero = false
     end
     return all_zero
 end
@@ -1446,7 +1445,7 @@ function toloadHubMainLoop()
         end
 
         -- Chock On Loadhseet --
-        if toLoadHub.hoppie.loadsheet_chocks_off_sent and toLoadHub.phases.is_landed > 0 and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set then
+        if toLoadHub.hoppie.loadsheet_chocks_off_sent and toLoadHub.phases.is_landed and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set then
             local data_con = loadsheetStructure:new()
             data_con.typeL = 3
             data_con.labelText = "Ch. On"
