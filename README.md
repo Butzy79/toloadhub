@@ -24,7 +24,8 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Simulate Cargo**: If enabled, cargo loading/unloading is simulated; otherwise, it is loaded instantly.
 - **Use Imperial Units**: Set Imperial units. SimBrief has priority over this value. If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.
 - **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
-- **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.  
+- **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.
+
 ### SimBrief Settings  
 - **Username**: Your SimBrief username.
 - **Auto Fetch at Beginning**: Automatically fetches data from SimBrief when the plugin loads.  
@@ -35,6 +36,7 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Enable Loadsheet**: Activates the sending of the loadsheet for display in the MCDU.  
   - The loadsheet is also visible in the **ATC MENU** under **MSG RECORD**.
 - **Preliminary Loadsheet Only for Long-haul (+7hrs)**: Sends a preliminary loadsheet if a valid SimBrief plan exists, the flight number matches between SimBrief and the MCDU, and this option is enabled. The preliminary loadsheet can also be sent for all flights if not enabled.  
+- **Loadsheet for chocks on and off**:  Sends a CPDLC message at FL100 with chocks-off and takeoff times, and another after you turn off your beacon and engines, including landing.
 
 ### Door Settings  
 - **Close Doors after Boarding**: Automatically closes doors after boarding is completed.  

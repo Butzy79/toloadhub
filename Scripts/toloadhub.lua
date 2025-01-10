@@ -10,17 +10,6 @@
     Features include automatic loading from SimBrief, random passenger generation, and real-time loading.
 
     TODO: Missing max Fuel and Cargo for A339 and A346
-    TODO: DOORS:
-    Clicca se DOOR sempe e solo manuali se no:
-    Before staqrt se:
-    Airstair vs Jetbridg
-    Airstair:
-    A319 A20N A321 A21N:COme ora, selezioni o L1 o L4 IN DEBOARDING NEVER L4
-    A346 and A339: L1, L2, L4 door should open. (capire se la l2 che indice ha) da opzioni preselezionare se L1 e L4 e anche L2 (la 6??)
-
-    Jetbridg:
-    A319 A20N A321 A21N: SEMPRE e solo L1 anche per DEBOARDIN
-    A346 and A339: Dare una opzione che mostra L1, L2 e L4 e selzioni quello che vuoi.
     License: MIT License
 --]]
 
@@ -31,10 +20,14 @@ if not valid_plane_icao[PLANE_ICAO] then
     return
 end
 
+--    Airstair vs Jetbridge--
+--    Jetbridge:
+--    A319 A20N: Only L1
+
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.11.1",
+    version = "0.12.0",
     file = "toloadhub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -54,6 +47,7 @@ local toLoadHub = {
     kgPerUnit = 25,
     first_init = false,
     is_lbs = false,
+    is_jetbridge = false,
     unitLabel = "KGS",
     unitTLabel = "T",
     phases = {
@@ -67,6 +61,8 @@ local toLoadHub = {
         is_cargo_deboarded = false,
         is_onboarding_pause = false,
         is_onboarded = false,
+        is_flying = false,
+        is_landed = false,
         is_deboarding = false,
         is_deboarding_pause = false,
         is_deboarded = false,
@@ -76,6 +72,7 @@ local toLoadHub = {
         pax_loaded = false,
         cargo_load = false,
         cargo_loaded = false,
+        we_are_landed = false,
         pax_unload = false,
         pax_unloaded = false,
         cargo_unload = false,
@@ -83,7 +80,6 @@ local toLoadHub = {
         all_unload = false,
         all_unloaded = false
     },
-    boarding_speed = 0,
     boarding_secnds_per_pax = 0,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     next_cargo_check = os.time(),
@@ -97,11 +93,22 @@ local toLoadHub = {
     deboarding_cargo_sound_played = false,
     setWeightCommand = false,
     full_deboard_sound = false,
+    is_onground = true,
+    chocks_off_time = os.date("%H:%M"),
+    chocks_on_time = os.date("%H:%M"),
+    chocks_out_time = os.date("%H:%M"),
+    chocks_in_time = os.date("%H:%M"),
+    chocks_off_set = false,
+    chocks_on_set = false,
+    chocks_out_set = false,
+    chocks_in_set = false,
     hoppie = {
         loadsheet_sent = false,
         loadsheet_sending = false,
         loadsheet_preliminary_ready = false,
         loadsheet_preliminary_sent = false,
+        loadsheet_chocks_off_sent = false,
+        loadsheet_chocks_on_sent = false,
         loadsheet_check = os.time(),
     },
     simbrief = {
@@ -135,7 +142,8 @@ local toLoadHub = {
         hoppie = {
             secret = "",
             enable_loadsheet = true,
-            preliminary_loadsheet = false
+            preliminary_loadsheet = true,
+            chocks_loadsheet = true,
         },
         door = {
             close_boarding = true,
@@ -149,7 +157,7 @@ local toLoadHub = {
 local loadsheetStructure = {
     new = function(self)
         local obj = {
-            isFinal = false,
+            typeL = 0, -- 0 = preliminary, 1 = final, 2 = chocks off, 3 = chocks on
             warning = "",
             labelText = "",
             flt_no = "",
@@ -360,6 +368,16 @@ local function setIscsTemporarySimbrief()
     toLoadHub_FwdCargo_XP = toLoadHub.cargo_fwd
 end
 
+local function isAllEngineOff()
+    local engine = dataref_table("sim/flightmodel/engine/ENGN_running")
+    local all_zero = true
+
+    for _, value in ipairs(engine) do
+        if value > 0 then engine = false; break end
+    end
+    return all_zero
+end
+
 local function setAirplaneNumbers()
     if PLANE_ICAO == "A319" then
         toLoadHub.max_passenger = 145
@@ -405,12 +423,22 @@ local function resetAirplaneParameters()
     toLoadHub.wait_until_speak = os.time()
     toLoadHub.setWeightTime = os.time()
     toLoadHub.next_ready_to_start_check = os.time()
+    toLoadHub.chocks_off_time = os.date("%H:%M:%S")
+    toLoadHub.chocks_on_time = os.date("%H:%M:%S")
+    toLoadHub.chocks_out_time = os.date("%H:%M:%S")
+    toLoadHub.chocks_in_time = os.date("%H:%M:%S")
+    toLoadHub.chocks_off_set = false
+    toLoadHub.chocks_on_set = false
+    toLoadHub.chocks_out_set = false
+    toLoadHub.chocks_in_set = false
     toLoadHub.what_to_speak = nil
+    toLoadHub.is_jetbridge = false
     toLoadHub.boarding_sound_played = false
     toLoadHub.deboarding_sound_played = false
     toLoadHub.boarding_cargo_sound_played = false
     toLoadHub.deboarding_cargo_sound_played = false
     toLoadHub.full_deboard_sound = false
+    toLoadHub.is_onground = true
     toLoadHub.error_message = nil
     for key in pairs(toLoadHub.hoppie) do
         if key == "loadsheet_check" then
@@ -518,9 +546,31 @@ local function playFinalSound()
     toLoadHub.full_deboard_sound = true
 end
 
+local function isAnyDoorOpen()
+    return (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or
+           (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
+           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and
+            (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339"))
+end
+
+local function allDoorsOpen()
+    return (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) and ((toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
+           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and
+             (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")))
+end
+
+local function areAllDoorsClosed()
+    if PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339" then
+        return toLoadHub_Doors_6 == 0 and toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 == 0
+    else
+        return toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 == 0
+    end
+end
+
 local function openDoors(boarding)
     local setVal = boarding and toLoadHub.settings.door.open_boarding or toLoadHub.settings.door.open_deboarding
     toLoadHub_Doors_1 = 2
+    if toLoadHub.is_jetbridge and PLANE_ICAO == "A319" or PLANE_ICAO == "A20N" then return end
     if setVal > 1 then
         toLoadHub_Doors_2 = 2
         if PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339" then
@@ -618,16 +668,30 @@ local function sendLoadsheetToToliss(data)
     end
 
     toLoadHub.hoppie.loadsheet_sending = true
-
-    local loadSheetContent = "/data2/313//NE/" .. table.concat({
-        "Loadsheet " .. data.labelText .. " " .. os.date("%H:%M"),
-        formatRowLoadSheet("ZFW",  data.zfw, 9),
-        formatRowLoadSheet("ZFWCG", data.zfwcg, 9),
-        formatRowLoadSheet("GWCG", data.gwcg, 9),
-        formatRowLoadSheet("F.BLK", data.f_blk, 9),
-    }, "\n")
-    if data.warning ~= "" then
-        loadSheetContent = loadSheetContent .. "\n" .. formatRowLoadSheet("@WARN!@ F.BLK EXP.", data.warning, 22)
+    local loadSheetContent = ""
+    if data.typeL < 2 then
+        loadSheetContent = "/data2/313//NE/" .. table.concat({
+            "Loadsheet " .. data.labelText .. " " .. os.date("%H:%M"),
+            formatRowLoadSheet("ZFW",  data.zfw, 9),
+            formatRowLoadSheet("ZFWCG", data.zfwcg, 9),
+            formatRowLoadSheet("GWCG", data.gwcg, 9),
+            formatRowLoadSheet("F.BLK", data.f_blk, 9),
+        }, "\n")
+        if data.warning ~= "" then
+            loadSheetContent = loadSheetContent .. "\n" .. formatRowLoadSheet("@WARN!@ F.BLK EXP.", data.warning, 22)
+        end
+    elseif data.typeL == 2 then
+        loadSheetContent = "/data2/323//NE/" .. table.concat({
+            "ACTUAL TIMES @-@ " .. os.date("%H:%M"),
+            formatRowLoadSheet("Chock out", toLoadHub.chocks_out_time, 22),
+            formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
+        }, "\n")
+    elseif data.typeL == 3 then
+        loadSheetContent = "/data2/333//NE/" .. table.concat({
+            "ARRIVAL TIMES @-@ " .. os.date("%H:%M"),
+            formatRowLoadSheet("Landing", toLoadHub.chocks_on_time, 22),
+            formatRowLoadSheet("Chock in", toLoadHub.chocks_in_time, 22),
+        }, "\n")
     end
 
     debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(data.flt_no)))
@@ -640,7 +704,6 @@ local function sendLoadsheetToToliss(data)
         loadSheetContent:gsub("\n", "%%0A")
     )
 
-
     local _, code = http.request{
         url = urls.hoppie_connect,
         method = "POST",
@@ -651,8 +714,11 @@ local function sendLoadsheetToToliss(data)
         source = ltn12.source.string(payload),
     }
     debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
-    if code == 200 and data.isFinal then toLoadHub.hoppie.loadsheet_sent = true end
-    if code == 200 and not data.isFinal then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
+    if code == 200 and data.typeL == 0 then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
+    if code == 200 and data.typeL == 1  then toLoadHub.hoppie.loadsheet_sent = true end
+    if code == 200 and data.typeL == 2 then toLoadHub.hoppie.loadsheet_chocks_off_sent = true end
+    if code == 200 and data.typeL == 3 then toLoadHub.hoppie.loadsheet_chocks_on_sent = true end
+
     if code ~= 200 then toLoadHub.error_message = "Hoppie returned an error. Please check your secret value." end
     toLoadHub.hoppie.loadsheet_sending = false
 end
@@ -705,7 +771,21 @@ function viewToLoadHubWindow()
         imgui.Spacing()
     end
 
-    if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
+    -- In Air
+    if toLoadHub_onground_any < 1 then
+        if toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
+            imgui.TextUnformatted("Have a nice flight!")
+            imgui.PopStyleColor()
+        else 
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+            imgui.TextUnformatted("You cannot board while in flight.")
+            imgui.PopStyleColor()
+        end
+    end
+
+    -- First Init in case
+    if toLoadHub_onground_any > 0 and not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF7F7F7F)
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
         imgui.PopStyleColor()
@@ -716,7 +796,7 @@ function viewToLoadHubWindow()
     end
 
     -- Starting Onboarding and Passenger/Cargo Selection
-    if not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
+    if toLoadHub_onground_any > 0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
         local passengeraNumberChanged, newPassengerNumber = imgui.SliderInt("Passengers number", toLoadHub.pax_count, 0, toLoadHub.max_passenger, "Value: %d")
         if passengeraNumberChanged then
             toLoadHub.pax_count = newPassengerNumber
@@ -736,25 +816,25 @@ function viewToLoadHubWindow()
         end
 
         if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) then
-            if (toLoadHub_Doors_1 and toLoadHub_Doors_1>0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
-               (toLoadHub_Doors_6 and toLoadHub_Doors_6 >1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
+            if isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0 then
                 imgui.Separator()
                 imgui.Spacing()
 
-                if imgui.Button("Start Boarding") then
+                if imgui.Button("Start Boarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
                     openDoors(true)
                     toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
                     toLoadHub.next_boarding_check = os.time()
                     toLoadHub.next_cargo_check = os.time()
                     toLoadHub.phases.is_onboarding = true
                 end
-            elseif toLoadHub.settings.door.open_boarding > 0 then
-                if imgui.Button("Start Boarding (Auto Open Doors)") then
-                    openDoors(true)
-                    toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
-                    toLoadHub.next_boarding_check = os.time()
-                    toLoadHub.next_cargo_check = os.time()
-                    toLoadHub.phases.is_onboarding = true
+                if not allDoorsOpen() then
+                    if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
+                        toLoadHub.is_jetbridge = false
+                    end
+                    imgui.SameLine(100)
+                    if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
+                        toLoadHub.is_jetbridge = true
+                    end
                 end
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
@@ -834,11 +914,7 @@ function viewToLoadHubWindow()
     end
 
     -- Omboarded Phase (Boarding Complete), Ready for deboarding
-    if toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding then
-        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
-        imgui.TextUnformatted("Boarding and cargo loading have been completed.")
-        imgui.PopStyleColor()
-        imgui.Spacing()
+    if toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
         if toLoadHub.pax_count > 0 then
             imgui.TextUnformatted(string.format("Passenger boarded %s", toLoadHub_NoPax))
@@ -848,26 +924,30 @@ function viewToLoadHubWindow()
         end
         imgui.PopStyleColor()
 
-        if (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
-           (toLoadHub_Doors_6 and toLoadHub_Doors_6 >1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
-            if imgui.Button("Start Deboarding") then
+        if isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0 then
+            if imgui.Button("Start Deboarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
                 openDoors(false)
                 toLoadHub.phases.is_deboarding = true
                 toLoadHub.next_boarding_check = os.time()
                 toLoadHub.next_cargo_check = os.time()
             end
-            imgui.SameLine(200)
-        elseif toLoadHub.settings.door.open_deboarding > 0 then
-            if imgui.Button("Start Deboarding (Auto Open Doors)") then
-                openDoors(false)
-                toLoadHub.phases.is_deboarding = true
-                toLoadHub.next_boarding_check = os.time()
-                toLoadHub.next_cargo_check = os.time()
+            if not allDoorsOpen() then
+                if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
+                    toLoadHub.is_jetbridge = false
+                end
+                imgui.SameLine(100)
+                if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
+                    toLoadHub.is_jetbridge = true
+                end
             end
+            imgui.SameLine(300)
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted("Open the doors to start the deboarding.")
             imgui.PopStyleColor()
+            imgui.Spacing()
+            imgui.Spacing()
+            imgui.SameLine(235)
         end
         if imgui.Button("Reset") then
             resetAirplaneParameters()
@@ -948,38 +1028,32 @@ function viewToLoadHubWindow()
     end
 
     -- Time Selector for passengers
-    if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and
+    if toLoadHub_onground_any > 0 and (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and
        ((not toLoadHub.phases.is_onboarded and (not toLoadHub.phases.is_onboarding or toLoadHub.phases.is_onboarding_pause)) or
        (toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarded and (not toLoadHub.phases.is_deboarding or toLoadHub.phases.is_deboarding_pause))) then
         local generalSpeed = 3
 
-        if (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) and ((toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
-           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339"))) then
+        if allDoorsOpen() then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("Both doors are open and in use.")
             imgui.PopStyleColor()
             generalSpeed = 2
-        end
-
-        if generalSpeed == 3 and 
-           ((toLoadHub_Doors_1 and toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 and toLoadHub_Doors_2 == 0 and 
-            (toLoadHub.settings.door.open_boarding > 1 and not toLoadHub.phases.is_onboarded) or 
-            (toLoadHub.settings.door.open_deboarding > 1 and toLoadHub.phases.is_onboarded)
-           ) or 
-           (toLoadHub_Doors_6 and toLoadHub_Doors_6 == 0 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339") and
-            (toLoadHub.settings.door.open_boarding > 1 and not toLoadHub.phases.is_onboarded) or 
-            (toLoadHub.settings.door.open_deboarding > 1 and toLoadHub.phases.is_onboarded)
-           )) then
+        elseif areAllDoorsClosed() and
+            ((toLoadHub.settings.door.open_boarding > 1 and not toLoadHub.phases.is_onboarded) or
+            (toLoadHub.settings.door.open_deboarding > 1 and toLoadHub.phases.is_onboarded)) then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("All passenger doors will be operated.")
             imgui.PopStyleColor()
             generalSpeed = 2
+        elseif toLoadHub.is_jetbridge then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
+            imgui.TextUnformatted("Jetbridge attached.")
+            imgui.PopStyleColor()
+            generalSpeed = 2
         end
 
-        if (toLoadHub.settings.door.open_boarding and not toLoadHub.phases.is_onboarded) or
-           (toLoadHub.settings.door.open_deboarding and toLoadHub.phases.is_onboarded) or
-           (toLoadHub_Doors_1 and toLoadHub_Doors_1 > 0) or (toLoadHub_Doors_2 and toLoadHub_Doors_2 > 1) or
-           (toLoadHub_Doors_6 and toLoadHub_Doors_6 > 1 and (PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339")) then
+        if isAnyDoorOpen() or (toLoadHub.settings.door.open_boarding > 0 and not toLoadHub.phases.is_onboarded) or
+           (toLoadHub.settings.door.open_deboarding > 0  and toLoadHub.phases.is_onboarded) then
             local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
             local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
             if toLoadHub.settings.general.simulate_cargo then
@@ -1116,6 +1190,9 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Preliminary Loadsheet Only for Long-haul (+7hrs)", toLoadHub.settings.hoppie.preliminary_loadsheet)
     if changed then toLoadHub.settings.hoppie.preliminary_loadsheet , setSave = newval, true end
+
+    changed, newval = imgui.Checkbox("Loadsheet for chocks on and off", toLoadHub.settings.hoppie.chocks_loadsheet)
+    if changed then toLoadHub.settings.hoppie.chocks_loadsheet , setSave = newval, true end
 
     imgui.TextUnformatted("Secret:")
     local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
@@ -1282,6 +1359,16 @@ function toloadHubMainLoop()
         end
     end
 
+    -- We Are Flying
+    if not toLoadHub.phases.is_flying and not toLoadHub.phases.is_landed and toLoadHub_onground_any < 1 then
+        toLoadHub.phases.is_flying = true
+    end
+
+    -- We Are Landed
+    if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and isAllEngineOff() then
+        toLoadHub.phases.is_landed = true
+    end
+
     -- Deboarding Phase and Finishing Deboarding
     if toLoadHub.phases.is_deboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
         if toLoadHub_NoPax > 0 and now > toLoadHub.next_boarding_check then
@@ -1317,12 +1404,64 @@ function toloadHubMainLoop()
          end
     end
 
+
+    -- Chocks Off and On
+    if toLoadHub.settings.hoppie.chocks_loadsheet then
+         -- Beacon for Chock Off Loadsheet --
+        if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on > 0 and toLoadHub_parking_brake_ratio <=0.1 then
+            toLoadHub.chocks_out_set = true
+            toLoadHub.chocks_out_time = os.date("%H:%M")
+            toLoadHub.hoppie.loadsheet_check = os.time() + 1
+        end
+        -- Take Off for Chock Off Loadsheet --
+        if not toLoadHub.chocks_off_set and toLoadHub.is_onground and toLoadHub_onground_any < 1  then
+            toLoadHub.is_onground = false
+            toLoadHub.chocks_off_set = true
+            toLoadHub.chocks_off_time = os.date("%H:%M")
+            toLoadHub.hoppie.loadsheet_check = os.time() + 1
+        end
+
+        -- Landing for Chock On Loadsheet --
+        if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_on_set and not toLoadHub.is_onground and toLoadHub_onground_any > 0 then
+            toLoadHub.is_onground = true
+            toLoadHub.chocks_on_set = true
+            toLoadHub.chocks_on_time = os.date("%H:%M")
+            toLoadHub.hoppie.loadsheet_check = os.time() + 60
+        end
+
+        -- Engine Off for Chock On Loadsheet --
+        if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_in_set and toLoadHub_beacon_lights_on == 0 and isAllEngineOff() then
+            toLoadHub.chocks_in_set = true
+            toLoadHub.chocks_in_time = os.date("%H:%M")
+            toLoadHub.hoppie.loadsheet_check = os.time() + 60
+        end
+
+        -- Altitude Chock Off Loadsheet --
+        if not toLoadHub.hoppie.loadsheet_chocks_off_sent and toLoadHub_pressure_altitude >= 10000 then
+            local data_coff = loadsheetStructure:new()
+            data_coff.typeL = 2
+            data_coff.labelText = "Ch. Off"
+            data_coff.flt_no = toLoadHub_flight_no
+            sendLoadsheetToToliss(data_coff)
+        end
+
+        -- Chock On Loadhseet --
+        if toLoadHub_onground_any > 0 and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set and toLoadHub.hoppie.loadsheet_check < now then
+            local data_con = loadsheetStructure:new()
+            data_con.typeL = 3
+            data_con.labelText = "Ch. On"
+            data_con.flt_no = toLoadHub_flight_no
+            sendLoadsheetToToliss(data_con)
+        end
+    end
+
     -- Focus windows --
-    if toLoadHub.focus_windows.pax_load and not toLoadHub.focus_windows.pax_loaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_loaded = true end
-    if toLoadHub.focus_windows.cargo_load and not toLoadHub.focus_windows.cargo_loaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_loaded = true end
-    if toLoadHub.focus_windows.pax_unload and not toLoadHub.focus_windows.pax_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_unloaded = true end
-    if toLoadHub.focus_windows.cargo_unload and not toLoadHub.focus_windows.cargo_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_unloaded = true end
-    if toLoadHub.focus_windows.all_unload and not toLoadHub.focus_windows.all_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.all_unloaded = true end
+    if toLoadHub.phases.is_pax_onboarded and not toLoadHub.focus_windows.pax_loaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_loaded = true end
+    if toLoadHub.phases.is_cargo_onboarded and not toLoadHub.focus_windows.cargo_loaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_loaded = true end
+    if toLoadHub.phases.is_pax_deboarded and not toLoadHub.focus_windows.pax_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_unloaded = true end
+    if toLoadHub.phases.is_landed and not toLoadHub.focus_windows.we_are_landed then focusOnToLoadHub() toLoadHub.focus_windows.we_are_landed = true end
+    if toLoadHub.phases.is_cargo_deboarded and not toLoadHub.focus_windows.cargo_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_unloaded = true end
+    if toLoadHub.phases.is_deboarded and not toLoadHub.focus_windows.all_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.all_unloaded = true end
 
     -- Play sound if not played yet and they should be
     if toLoadHub_NoPax >= toLoadHub.pax_count and not toLoadHub.boarding_sound_played and toLoadHub.phases.is_pax_onboarded then playChimeSound() end
@@ -1376,7 +1515,7 @@ function toloadHubMainLoop()
 
     if not toLoadHub.hoppie.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.phases.is_onboarded then
         local data_f = loadsheetStructure:new()
-        data_f.isFinal = true
+        data_f.typeL = 1
         data_f.labelText = "@Final@"
         data_f.flt_no = toLoadHub_flight_no
         if toLoadHub_zfw == nil then
@@ -1397,7 +1536,7 @@ function toloadHubMainLoop()
         sendLoadsheetToToliss(data_f)
     end
 
-    if (not toLoadHub.settings.hoppie.preliminary_loadsheet or toLoadHub.simbrief.est_block ~=nil and toLoadHub.simbrief.est_block/60 > 420) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~= nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
+    if toLoadHub_onground_any > 0 and (not toLoadHub.settings.hoppie.preliminary_loadsheet or toLoadHub.simbrief.est_block ~=nil and toLoadHub.simbrief.est_block/60 > 420) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~= nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
         if not toLoadHub.hoppie.loadsheet_preliminary_ready then
             toLoadHub.hoppie.loadsheet_check = os.time() + 3
             toLoadHub.hoppie.loadsheet_preliminary_ready = true
@@ -1405,7 +1544,7 @@ function toloadHubMainLoop()
         local data_p = loadsheetStructure:new()
         divideCargoFwdAft()
         setIscsTemporarySimbrief()
-        data_p.isFinal = false
+        data_p.typeL = 0
         data_p.labelText = "Prelim."
         data_p.zfw = string.format("%.1f", toLoadHub.simbrief.est_zfw/1000)
         if toLoadHub_blockZfwCG == nil then
@@ -1457,7 +1596,7 @@ end
 
 if XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
     dataref("toLoadHub_zfwCG", "toliss_airbus/iscsinterface/zfwCG", "readonly")
-elseif XPLMFindDataRef("toliss_airbus/iscsinterface/zfwCG") then
+elseif XPLMFindDataRef("toliss_airbus/init/ZFWCG") then
     dataref("toLoadHub_zfwCG", "toliss_airbus/init/ZFWCG", "readonly")
 else
     toLoadHub_zfwCG = nil
@@ -1481,6 +1620,11 @@ dataref("toLoadHub_m_fuel_total", "sim/flightmodel/weight/m_fuel_total", "readon
 
 dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
 dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
+
+dataref("toLoadHub_pressure_altitude", "sim/flightmodel2/position/pressure_altitude", "readonly")
+dataref("toLoadHub_beacon_lights_on", "sim/cockpit/electrical/beacon_lights_on", "readonly")
+dataref("toLoadHub_parking_brake_ratio", "sim/cockpit2/controls/parking_brake_ratio", "readonly")
+dataref("toLoadHub_onground_any", "sim/flightmodel/failures/onground_any", "readonly")
 
 if XPLMFindDataRef("jd/ghd/execute") then
     dataref("toloadHub_jdexe","jd/ghd/execute", "writeable")
