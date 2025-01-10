@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.12.0",
+    version = "0.12.1",
     file = "toloadhub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -1426,14 +1426,14 @@ function toloadHubMainLoop()
             toLoadHub.is_onground = true
             toLoadHub.chocks_on_set = true
             toLoadHub.chocks_on_time = os.date("%H:%M")
-            toLoadHub.hoppie.loadsheet_check = os.time() + 60
+            toLoadHub.hoppie.loadsheet_check = os.time() + 5
         end
 
         -- Engine Off for Chock On Loadsheet --
         if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_in_set and toLoadHub_beacon_lights_on == 0 and isAllEngineOff() then
             toLoadHub.chocks_in_set = true
             toLoadHub.chocks_in_time = os.date("%H:%M")
-            toLoadHub.hoppie.loadsheet_check = os.time() + 60
+            toLoadHub.hoppie.loadsheet_check = os.time() + 5
         end
 
         -- Altitude Chock Off Loadsheet --
@@ -1446,7 +1446,7 @@ function toloadHubMainLoop()
         end
 
         -- Chock On Loadhseet --
-        if toLoadHub_onground_any > 0 and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set and toLoadHub.hoppie.loadsheet_check < now then
+        if toLoadHub_onground_any > 0 and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set then
             local data_con = loadsheetStructure:new()
             data_con.typeL = 3
             data_con.labelText = "Ch. On"
