@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.12.0",
+    version = "0.12.1",
     file = "toloadhub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -50,6 +50,7 @@ local toLoadHub = {
     is_jetbridge = false,
     unitLabel = "KGS",
     unitTLabel = "T",
+    flt_no = "",
     phases = {
         is_ready_to_start = false,
         is_gh_started = false,
@@ -328,7 +329,7 @@ local function fetchSimbriefFPlan()
     toLoadHub.simbrief.pax_count = toLoadHub.pax_count
 
     if toLoadHub.settings.simbrief.randomize_passenger then
-        local r = 0.01 * math.random(92, 103)
+        local r = 0.01 * math.random(95, 103)
         toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
     end
@@ -371,9 +372,8 @@ end
 local function isAllEngineOff()
     local engine = dataref_table("sim/flightmodel/engine/ENGN_running")
     local all_zero = true
-
-    for _, value in ipairs(engine) do
-        if value > 0 then engine = false; break end
+    if engine[0] == 1 or engine[1] == 1 or engine[2] == 1 or engine[3] == 1 then
+        all_zero = false
     end
     return all_zero
 end
@@ -448,6 +448,7 @@ local function resetAirplaneParameters()
         end
     end
     toLoadHub.setWeightCommand = false
+    toLoadHub.flt_no = ""
     for key in pairs(toLoadHub.phases) do
         toLoadHub.phases[key] = false
     end
@@ -1362,6 +1363,7 @@ function toloadHubMainLoop()
     -- We Are Flying
     if not toLoadHub.phases.is_flying and not toLoadHub.phases.is_landed and toLoadHub_onground_any < 1 then
         toLoadHub.phases.is_flying = true
+        toLoadHub.flt_no = toLoadHub_flight_no
     end
 
     -- We Are Landed
@@ -1406,7 +1408,7 @@ function toloadHubMainLoop()
 
 
     -- Chocks Off and On
-    if toLoadHub.settings.hoppie.chocks_loadsheet then
+    if toLoadHub.settings.hoppie.chocks_loadsheet  and toLoadHub.settings.hoppie.enable_loadsheet then
          -- Beacon for Chock Off Loadsheet --
         if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on > 0 and toLoadHub_parking_brake_ratio <=0.1 then
             toLoadHub.chocks_out_set = true
@@ -1426,31 +1428,31 @@ function toloadHubMainLoop()
             toLoadHub.is_onground = true
             toLoadHub.chocks_on_set = true
             toLoadHub.chocks_on_time = os.date("%H:%M")
-            toLoadHub.hoppie.loadsheet_check = os.time() + 60
+            toLoadHub.hoppie.loadsheet_check = os.time() + 5
         end
 
         -- Engine Off for Chock On Loadsheet --
         if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_in_set and toLoadHub_beacon_lights_on == 0 and isAllEngineOff() then
             toLoadHub.chocks_in_set = true
             toLoadHub.chocks_in_time = os.date("%H:%M")
-            toLoadHub.hoppie.loadsheet_check = os.time() + 60
+            toLoadHub.hoppie.loadsheet_check = os.time() + 5
         end
 
         -- Altitude Chock Off Loadsheet --
-        if not toLoadHub.hoppie.loadsheet_chocks_off_sent and toLoadHub_pressure_altitude >= 10000 then
+        if toLoadHub.hoppie.loadsheet_sent and not toLoadHub.hoppie.loadsheet_chocks_off_sent and toLoadHub_pressure_altitude >= 10000 then
             local data_coff = loadsheetStructure:new()
             data_coff.typeL = 2
             data_coff.labelText = "Ch. Off"
-            data_coff.flt_no = toLoadHub_flight_no
+            data_coff.flt_no = toLoadHub.flt_no
             sendLoadsheetToToliss(data_coff)
         end
 
         -- Chock On Loadhseet --
-        if toLoadHub_onground_any > 0 and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set and toLoadHub.hoppie.loadsheet_check < now then
+        if toLoadHub.hoppie.loadsheet_chocks_off_sent and toLoadHub.phases.is_landed and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set then
             local data_con = loadsheetStructure:new()
             data_con.typeL = 3
             data_con.labelText = "Ch. On"
-            data_con.flt_no = toLoadHub_flight_no
+            data_con.flt_no = toLoadHub.flt_no
             sendLoadsheetToToliss(data_con)
         end
     end
