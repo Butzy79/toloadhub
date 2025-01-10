@@ -77,7 +77,6 @@ local toLoadHub = {
         all_unload = false,
         all_unloaded = false
     },
-    boarding_speed = 0,
     boarding_secnds_per_pax = 0,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     next_cargo_check = os.time(),
@@ -92,10 +91,10 @@ local toLoadHub = {
     setWeightCommand = false,
     full_deboard_sound = false,
     is_onground = true,
-    chocks_off_time = os.date("%H:%M:%S"),
-    chocks_on_time = os.date("%H:%M:%S"),
-    chocks_out_time = os.date("%H:%M:%S"),
-    chocks_in_time = os.date("%H:%M:%S"),
+    chocks_off_time = os.date("%H:%M"),
+    chocks_on_time = os.date("%H:%M"),
+    chocks_out_time = os.date("%H:%M"),
+    chocks_in_time = os.date("%H:%M"),
     chocks_off_set = false,
     chocks_on_set = false,
     chocks_out_set = false,
@@ -680,18 +679,17 @@ local function sendLoadsheetToToliss(data)
         end
     elseif data.typeL == 2 then
         loadSheetContent = "/data2/323//NE/" .. table.concat({
-            "ACTUAL TIMES " .. os.date("%H:%M"),
-            "OUT time " .. toLoadHub.chocks_out_time,
-            "OFF time " .. toLoadHub.chocks_off_time
+            "ACTUAL TIMES @-@ " .. os.date("%H:%M"),
+            formatRowLoadSheet("Chock out", toLoadHub.chocks_out_time, 22),
+            formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
         }, "\n")
     elseif data.typeL == 3 then
         loadSheetContent = "/data2/333//NE/" .. table.concat({
-            "ACTUAL TIMES ARRIVAL " .. os.date("%H:%M"),
-            "ON time " .. toLoadHub.chocks_on_time,
-            "IN time " .. toLoadHub.chocks_in_time
+            "ARRIVAL TIMES @-@ " .. os.date("%H:%M"),
+            formatRowLoadSheet("Landing", toLoadHub.chocks_on_time, 22),
+            formatRowLoadSheet("Chock in", toLoadHub.chocks_in_time, 22),
         }, "\n")
     end
-
 
     debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(data.flt_no)))
 
@@ -703,7 +701,6 @@ local function sendLoadsheetToToliss(data)
         loadSheetContent:gsub("\n", "%%0A")
     )
 
-
     local _, code = http.request{
         url = urls.hoppie_connect,
         method = "POST",
@@ -714,8 +711,8 @@ local function sendLoadsheetToToliss(data)
         source = ltn12.source.string(payload),
     }
     debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
-    if code == 200 and data.typeL == 0  then toLoadHub.hoppie.loadsheet_sent = true end
-    if code == 200 and data.typeL == 1 then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
+    if code == 200 and data.typeL == 0 then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
+    if code == 200 and data.typeL == 1  then toLoadHub.hoppie.loadsheet_sent = true end
     if code == 200 and data.typeL == 2 then toLoadHub.hoppie.loadsheet_chocks_off_sent = true end
     if code == 200 and data.typeL == 3 then toLoadHub.hoppie.loadsheet_chocks_on_sent = true end
 
@@ -813,11 +810,14 @@ function viewToLoadHubWindow()
                     toLoadHub.next_cargo_check = os.time()
                     toLoadHub.phases.is_onboarding = true
                 end
-                if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
-                    toLoadHub.is_jetbridge = false
-                end
-                if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
-                    toLoadHub.is_jetbridge = true
+                if not allDoorsOpen() then
+                    if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
+                        toLoadHub.is_jetbridge = false
+                    end
+                    imgui.SameLine(100)
+                    if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
+                        toLoadHub.is_jetbridge = true
+                    end
                 end
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
@@ -918,7 +918,7 @@ function viewToLoadHubWindow()
                 toLoadHub.next_boarding_check = os.time()
                 toLoadHub.next_cargo_check = os.time()
             end
-            imgui.SameLine(200)
+            imgui.SameLine(270)
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted("Open the doors to start the deboarding.")
@@ -1027,7 +1027,7 @@ function viewToLoadHubWindow()
             generalSpeed = 2
         end
 
-        if isAnyDoorOpen() and (toLoadHub.settings.door.open_boarding and not toLoadHub.phases.is_onboarded) or
+        if isAnyDoorOpen() or (toLoadHub.settings.door.open_boarding and not toLoadHub.phases.is_onboarded) or
            (toLoadHub.settings.door.open_deboarding and toLoadHub.phases.is_onboarded) then
             local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
             local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
@@ -1372,16 +1372,16 @@ function toloadHubMainLoop()
     -- Chocks Off and On
     if toLoadHub.settings.hoppie.chocks_loadsheet then
          -- Beacon for Chock Off Loadsheet --
-        if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on and toLoadHub_parking_brake_ratio <=0.1 then
+        if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on > 0 and toLoadHub_parking_brake_ratio <=0.1 then
             toLoadHub.chocks_out_set = true
-            toLoadHub.chocks_out_time = os.date("%H:%M:%S")
+            toLoadHub.chocks_out_time = os.date("%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 1
         end
         -- Take Off for Chock Off Loadsheet --
         if not toLoadHub.chocks_off_set and toLoadHub.is_onground and toLoadHub_onground_any < 1  then
             toLoadHub.is_onground = false
             toLoadHub.chocks_off_set = true
-            toLoadHub.chocks_off_time = os.date("%H:%M:%S")
+            toLoadHub.chocks_off_time = os.date("%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 1
         end
 
@@ -1389,14 +1389,14 @@ function toloadHubMainLoop()
         if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_on_set and not toLoadHub.is_onground and toLoadHub_onground_any >= 1 then
             toLoadHub.is_onground = true
             toLoadHub.chocks_on_set = true
-            toLoadHub.chocks_on_time = os.date("%H:%M:%S")
+            toLoadHub.chocks_on_time = os.date("%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 60
         end
 
         -- Engine Off for Chock On Loadsheet --
-        if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_in_set and not toLoadHub_beacon_lights_on and isAllEngineOff() then
+        if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_in_set and toLoadHub_beacon_lights_on == 0 and isAllEngineOff() then
             toLoadHub.chocks_in_set = true
-            toLoadHub.chocks_in_time = os.date("%H:%M:%S")
+            toLoadHub.chocks_in_time = os.date("%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 60
         end
 
@@ -1410,7 +1410,7 @@ function toloadHubMainLoop()
         end
 
         -- Chock On Loadhseet --
-        if not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_on_set and toLoadHub.hoppie.loadsheet_check < now then
+        if not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set and toLoadHub.hoppie.loadsheet_check < now then
             local data_con = loadsheetStructure:new()
             data_con.typeL = 3
             data_con.labelText = "Ch. On"
@@ -1584,10 +1584,10 @@ dataref("toLoadHub_m_fuel_total", "sim/flightmodel/weight/m_fuel_total", "readon
 dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
 dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
 
-datared("toLoadHub_pressure_altitude", "sim/flightmodel2/position/pressure_altitude", "readonly")
-datared("toLoadHub_beacon_lights_on", "sim/cockpit/electrical/beacon_lights_on", "readonly")
-datared("toLoadHub_parking_brake_ratio", "sim/cockpit2/controls/parking_brake_ratio", "readonly")
-datared("toLoadHub_onground_any", "sim/flightmodel/failures/onground_any", "readonly")
+dataref("toLoadHub_pressure_altitude", "sim/flightmodel2/position/pressure_altitude", "readonly")
+dataref("toLoadHub_beacon_lights_on", "sim/cockpit/electrical/beacon_lights_on", "readonly")
+dataref("toLoadHub_parking_brake_ratio", "sim/cockpit2/controls/parking_brake_ratio", "readonly")
+dataref("toLoadHub_onground_any", "sim/flightmodel/failures/onground_any", "readonly")
 
 if XPLMFindDataRef("jd/ghd/execute") then
     dataref("toloadHub_jdexe","jd/ghd/execute", "writeable")
