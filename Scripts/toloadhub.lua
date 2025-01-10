@@ -370,8 +370,8 @@ local function isAllEngineOff()
     local engine = dataref_table("sim/flightmodel/engine/ENGN_running")
     local all_zero = true
 
-    for _, value in ipairs(my_table) do
-        if value > 0 then all_zero = false; break end
+    for _, value in ipairs(engine) do
+        if value > 0 then engine = false; break end
     end
     return all_zero
 end
