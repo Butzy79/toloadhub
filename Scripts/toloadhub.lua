@@ -61,6 +61,8 @@ local toLoadHub = {
         is_cargo_deboarded = false,
         is_onboarding_pause = false,
         is_onboarded = false,
+        is_flying = false,
+        is_landed = false,
         is_deboarding = false,
         is_deboarding_pause = false,
         is_deboarded = false,
@@ -70,6 +72,7 @@ local toLoadHub = {
         pax_loaded = false,
         cargo_load = false,
         cargo_loaded = false,
+        we_are_landed = false,
         pax_unload = false,
         pax_unloaded = false,
         cargo_unload = false,
@@ -768,7 +771,21 @@ function viewToLoadHubWindow()
         imgui.Spacing()
     end
 
-    if not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
+    -- In Air
+    if toLoadHub_onground_any < 1 then
+        if toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding then
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
+            imgui.TextUnformatted("Have a nice flight!")
+            imgui.PopStyleColor()
+        else 
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+            imgui.TextUnformatted("You cannot board while in flight.")
+            imgui.PopStyleColor()
+        end
+    end
+
+    -- First Init in case
+    if toLoadHub_onground_any > 0 and not toLoadHub.first_init then -- Not auto init, and plane not set to zero: RETURN
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF7F7F7F)
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
         imgui.PopStyleColor()
@@ -779,7 +796,7 @@ function viewToLoadHubWindow()
     end
 
     -- Starting Onboarding and Passenger/Cargo Selection
-    if not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
+    if toLoadHub_onground_any > 0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
         local passengeraNumberChanged, newPassengerNumber = imgui.SliderInt("Passengers number", toLoadHub.pax_count, 0, toLoadHub.max_passenger, "Value: %d")
         if passengeraNumberChanged then
             toLoadHub.pax_count = newPassengerNumber
@@ -897,11 +914,7 @@ function viewToLoadHubWindow()
     end
 
     -- Omboarded Phase (Boarding Complete), Ready for deboarding
-    if toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding then
-        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
-        imgui.TextUnformatted("Boarding and cargo loading have been completed.")
-        imgui.PopStyleColor()
-        imgui.Spacing()
+    if toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
         if toLoadHub.pax_count > 0 then
             imgui.TextUnformatted(string.format("Passenger boarded %s", toLoadHub_NoPax))
@@ -1003,7 +1016,7 @@ function viewToLoadHubWindow()
     end
 
     -- Time Selector for passengers
-    if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and
+    if toLoadHub_onground_any > 0 and (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and
        ((not toLoadHub.phases.is_onboarded and (not toLoadHub.phases.is_onboarding or toLoadHub.phases.is_onboarding_pause)) or
        (toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarded and (not toLoadHub.phases.is_deboarding or toLoadHub.phases.is_deboarding_pause))) then
         local generalSpeed = 3
@@ -1334,6 +1347,16 @@ function toloadHubMainLoop()
         end
     end
 
+    -- We Are Flying
+    if not toLoadHub.phases.is_flying and not toLoadHub.phases.is_landed and toLoadHub_onground_any < 1 then
+        toLoadHub.phases.is_flying = true
+    end
+
+    -- We Are Landed
+    if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and isAllEngineOff() then
+        toLoadHub.phases.is_landed = true
+    end
+
     -- Deboarding Phase and Finishing Deboarding
     if toLoadHub.phases.is_deboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
         if toLoadHub_NoPax > 0 and now > toLoadHub.next_boarding_check then
@@ -1369,6 +1392,7 @@ function toloadHubMainLoop()
          end
     end
 
+
     -- Chocks Off and On
     if toLoadHub.settings.hoppie.chocks_loadsheet then
          -- Beacon for Chock Off Loadsheet --
@@ -1386,7 +1410,7 @@ function toloadHubMainLoop()
         end
 
         -- Landing for Chock On Loadsheet --
-        if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_on_set and not toLoadHub.is_onground and toLoadHub_onground_any >= 1 then
+        if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_on_set and not toLoadHub.is_onground and toLoadHub_onground_any > 0 then
             toLoadHub.is_onground = true
             toLoadHub.chocks_on_set = true
             toLoadHub.chocks_on_time = os.date("%H:%M")
@@ -1410,7 +1434,7 @@ function toloadHubMainLoop()
         end
 
         -- Chock On Loadhseet --
-        if not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set and toLoadHub.hoppie.loadsheet_check < now then
+        if toLoadHub_onground_any > 0 and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set and toLoadHub.hoppie.loadsheet_check < now then
             local data_con = loadsheetStructure:new()
             data_con.typeL = 3
             data_con.labelText = "Ch. On"
@@ -1420,11 +1444,12 @@ function toloadHubMainLoop()
     end
 
     -- Focus windows --
-    if toLoadHub.focus_windows.pax_load and not toLoadHub.focus_windows.pax_loaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_loaded = true end
-    if toLoadHub.focus_windows.cargo_load and not toLoadHub.focus_windows.cargo_loaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_loaded = true end
-    if toLoadHub.focus_windows.pax_unload and not toLoadHub.focus_windows.pax_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_unloaded = true end
-    if toLoadHub.focus_windows.cargo_unload and not toLoadHub.focus_windows.cargo_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_unloaded = true end
-    if toLoadHub.focus_windows.all_unload and not toLoadHub.focus_windows.all_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.all_unloaded = true end
+    if toLoadHub.phases.is_pax_onboarded and not toLoadHub.focus_windows.pax_loaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_loaded = true end
+    if toLoadHub.phases.is_cargo_onboarded and not toLoadHub.focus_windows.cargo_loaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_loaded = true end
+    if toLoadHub.phases.is_pax_deboarded and not toLoadHub.focus_windows.pax_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.pax_unloaded = true end
+    if toLoadHub.phases.is_landed and not toLoadHub.focus_windows.we_are_landed then focusOnToLoadHub() toLoadHub.focus_windows.we_are_landed = true end
+    if toLoadHub.phases.is_cargo_deboarded and not toLoadHub.focus_windows.cargo_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.cargo_unloaded = true end
+    if toLoadHub.phases.is_deboarded and not toLoadHub.focus_windows.all_unloaded then focusOnToLoadHub() toLoadHub.focus_windows.all_unloaded = true end
 
     -- Play sound if not played yet and they should be
     if toLoadHub_NoPax >= toLoadHub.pax_count and not toLoadHub.boarding_sound_played and toLoadHub.phases.is_pax_onboarded then playChimeSound() end
@@ -1499,7 +1524,7 @@ function toloadHubMainLoop()
         sendLoadsheetToToliss(data_f)
     end
 
-    if (not toLoadHub.settings.hoppie.preliminary_loadsheet or toLoadHub.simbrief.est_block ~=nil and toLoadHub.simbrief.est_block/60 > 420) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~= nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
+    if toLoadHub_onground_any > 0 and (not toLoadHub.settings.hoppie.preliminary_loadsheet or toLoadHub.simbrief.est_block ~=nil and toLoadHub.simbrief.est_block/60 > 420) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~= nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
         if not toLoadHub.hoppie.loadsheet_preliminary_ready then
             toLoadHub.hoppie.loadsheet_check = os.time() + 3
             toLoadHub.hoppie.loadsheet_preliminary_ready = true
