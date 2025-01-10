@@ -329,7 +329,7 @@ local function fetchSimbriefFPlan()
     toLoadHub.simbrief.pax_count = toLoadHub.pax_count
 
     if toLoadHub.settings.simbrief.randomize_passenger then
-        local r = 0.01 * math.random(92, 103)
+        local r = 0.01 * math.random(95, 103)
         toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
     end
