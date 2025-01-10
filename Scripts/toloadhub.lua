@@ -1406,7 +1406,7 @@ function toloadHubMainLoop()
 
 
     -- Chocks Off and On
-    if toLoadHub.settings.hoppie.chocks_loadsheet then
+    if toLoadHub.settings.hoppie.chocks_loadsheet  and toLoadHub.settings.hoppie.enable_loadsheet then
          -- Beacon for Chock Off Loadsheet --
         if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on > 0 and toLoadHub_parking_brake_ratio <=0.1 then
             toLoadHub.chocks_out_set = true
@@ -1437,7 +1437,7 @@ function toloadHubMainLoop()
         end
 
         -- Altitude Chock Off Loadsheet --
-        if not toLoadHub.hoppie.loadsheet_chocks_off_sent and toLoadHub_pressure_altitude >= 10000 then
+        if toLoadHub.hoppie.loadsheet_check and not toLoadHub.hoppie.loadsheet_chocks_off_sent and toLoadHub_pressure_altitude >= 10000 then
             local data_coff = loadsheetStructure:new()
             data_coff.typeL = 2
             data_coff.labelText = "Ch. Off"
@@ -1446,7 +1446,7 @@ function toloadHubMainLoop()
         end
 
         -- Chock On Loadhseet --
-        if toLoadHub_onground_any > 0 and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set then
+        if toLoadHub.hoppie.loadsheet_chocks_off_sent and toLoadHub.phases.is_landed > 0 and not toLoadHub.hoppie.loadsheet_chocks_on_sent and toLoadHub.chocks_in_set then
             local data_con = loadsheetStructure:new()
             data_con.typeL = 3
             data_con.labelText = "Ch. On"
