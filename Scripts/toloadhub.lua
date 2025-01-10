@@ -931,11 +931,23 @@ function viewToLoadHubWindow()
                 toLoadHub.next_boarding_check = os.time()
                 toLoadHub.next_cargo_check = os.time()
             end
-            imgui.SameLine(270)
+            if not allDoorsOpen() then
+                if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
+                    toLoadHub.is_jetbridge = false
+                end
+                imgui.SameLine(100)
+                if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
+                    toLoadHub.is_jetbridge = true
+                end
+            end
+            imgui.SameLine(300)
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted("Open the doors to start the deboarding.")
             imgui.PopStyleColor()
+            imgui.Spacing()
+            imgui.Spacing()
+            imgui.SameLine(235)
         end
         if imgui.Button("Reset") then
             resetAirplaneParameters()
@@ -1040,8 +1052,8 @@ function viewToLoadHubWindow()
             generalSpeed = 2
         end
 
-        if isAnyDoorOpen() or (toLoadHub.settings.door.open_boarding and not toLoadHub.phases.is_onboarded) or
-           (toLoadHub.settings.door.open_deboarding and toLoadHub.phases.is_onboarded) then
+        if isAnyDoorOpen() or (toLoadHub.settings.door.open_boarding > 0 and not toLoadHub.phases.is_onboarded) or
+           (toLoadHub.settings.door.open_deboarding > 0  and toLoadHub.phases.is_onboarded) then
             local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
             local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
             if toLoadHub.settings.general.simulate_cargo then
