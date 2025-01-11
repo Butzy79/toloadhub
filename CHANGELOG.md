@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.  
 The format is based on [Keep a Changelog](https://keepachangelog.com/),  
 and this project adheres to [Semantic Versioning](https://semver.org/).
+## [0.13.0]- 2025-01-12
+### Added
+- Time is shown in local time by default. You can set it to UTC in the Hoppie settings section.
+
 ## [0.12.2]- 2025-01-10
 ### Added
 - Airstair / Jetbridge selection on boarding/deboarding
