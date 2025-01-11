@@ -1367,7 +1367,7 @@ function toloadHubMainLoop()
     end
 
     -- We Are Landed
-    if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and not isAllEngineOff() then
+    if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and isAllEngineOff() then
         toLoadHub.phases.is_landed = true
     end
 
