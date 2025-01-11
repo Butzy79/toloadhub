@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.12.1",
+    version = "0.12.2",
     file = "toloadhub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -1367,7 +1367,7 @@ function toloadHubMainLoop()
     end
 
     -- We Are Landed
-    if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and isAllEngineOff() then
+    if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and not isAllEngineOff() then
         toLoadHub.phases.is_landed = true
     end
 
