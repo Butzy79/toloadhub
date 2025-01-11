@@ -249,13 +249,6 @@ end
 -- == Utility Functions ==
 function saveSettingsToFileToLoadHub(final)
     debug(string.format("[%s] saveSettingsToFileToLoadHub(%s)", toLoadHub.title, tostring(final)))
-    if final and (toLoadHub.visible_settings or toLoadHub.visible_main) and not float_wnd_is_vr(toloadhub_window) then
-        local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
-        local scrLeft, scrTop, scrRight, scrBottom = XPLMGetScreenBoundsGlobal()
-        toLoadHub.settings.general.window_x = math.max(scrLeft, wLeft - scrLeft)
-        toLoadHub.settings.general.window_y = math.max(scrBottom, wBottom - scrBottom)
-    end
-
     LIP.save(SCRIPT_DIRECTORY .. toLoadHub.file, toLoadHub.settings)
     debug(string.format("[%s] file saved", toLoadHub.title))
 end
@@ -695,8 +688,8 @@ local function sendLoadsheetToToliss(data)
         }, "\n")
     end
 
-    debug(string.format("[%s] Hoppie flt_no %s.", toLoadHub.title, tostring(data.flt_no)))
-
+    debug(string.format("[%s] Hoppie flt_no %s, mcdu %s.", toLoadHub.title, tostring(data.flt_no), tostring(toLoadHub_flight_no)))
+    
     local payload = string.format("logon=%s&from=%s&to=%s&type=%s&packet=%s",
         toLoadHub.settings.hoppie.secret,
         toLoadHub.title,
@@ -1254,6 +1247,18 @@ function viewToLoadHubWindowSettings()
         setSave = true
     end
 
+    if not float_wnd_is_vr(toloadhub_window) then
+        imgui.Separator()
+        imgui.Spacing()
+        if imgui.Button("Save current window position", 140, 30) then
+            local wLeft, wTop, wRight, wBottom = float_wnd_get_geometry(toloadhub_window)
+            local scrLeft, scrTop, scrRight, scrBottom = XPLMGetScreenBoundsGlobal()
+            toLoadHub.settings.general.window_x = math.max(scrLeft, wLeft - scrLeft)
+            toLoadHub.settings.general.window_y = math.max(scrBottom, wBottom - scrBottom)
+            setSave = true
+        end
+    end
+
     if setSave then
         saveSettingsToFileToLoadHub(false)
         setSave = false
@@ -1366,7 +1371,7 @@ function toloadHubMainLoop()
         toLoadHub.flt_no = toLoadHub_flight_no
     end
 
-    -- We Are Landed
+    -- We Are Landed for focus
     if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and isAllEngineOff() then
         toLoadHub.phases.is_landed = true
     end
@@ -1455,6 +1460,11 @@ function toloadHubMainLoop()
             data_con.flt_no = toLoadHub.flt_no
             sendLoadsheetToToliss(data_con)
         end
+    end
+
+    -- Force FLight Number
+    if toLoadHub.flt_no and toLoadHub.flt_no ~= "" and toLoadHub.phases.is_flying and toLoadHub.phases.is_landed and toLoadHub_flight_no ~= toLoadHub.flt_no then
+        toLoadHub_flight_no = toLoadHub.flt_no 
     end
 
     -- Focus windows --
@@ -1620,7 +1630,7 @@ end
 dataref("toLoadHub_m_total", "sim/flightmodel/weight/m_total", "readonly")
 dataref("toLoadHub_m_fuel_total", "sim/flightmodel/weight/m_fuel_total", "readonly")
 
-dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "readonly")
+dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "writeable")
 dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
 
 dataref("toLoadHub_pressure_altitude", "sim/flightmodel2/position/pressure_altitude", "readonly")
