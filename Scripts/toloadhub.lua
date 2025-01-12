@@ -637,11 +637,11 @@ end
 local function addingCargoFwdAft()
     local someChanges = false
     if toLoadHub_AftCargo < toLoadHub.cargo_aft then
-        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + (toLoadHub.kgPerUnit * (math.random(45, 55) / 100)), toLoadHub.cargo_aft)
+        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + (toLoadHub.kgPerUnit * (math.random(40, 55) / 100)), toLoadHub.cargo_aft)
         someChanges = true
     end
     if toLoadHub_FwdCargo < toLoadHub.cargo_fwd then
-        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + (toLoadHub.kgPerUnit * (math.random(45, 55) / 100)), toLoadHub.cargo_fwd)
+        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + (toLoadHub.kgPerUnit * (math.random(40, 55) / 100)), toLoadHub.cargo_fwd)
         someChanges = true
     end
     return someChanges
@@ -767,7 +767,7 @@ function viewToLoadHubWindow()
         toLoadHub.settings.general.window_height = vrwinHeight
         toLoadHub.settings.general.window_width = vrwinWidth
     end
-    
+
     if toLoadHub.error_message ~= nil then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
         imgui.TextUnformatted(toLoadHub.error_message)
