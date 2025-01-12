@@ -82,6 +82,7 @@ local toLoadHub = {
         all_unloaded = false
     },
     boarding_secnds_per_pax = 0,
+    set_default_seconds = false,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     next_cargo_check = os.time(),
     wait_until_speak = os.time(),
@@ -247,6 +248,18 @@ local function calculateTimeWithCargo(a, b)
     return (res < a and a) or (res < b and b) or res
 end
 
+local function simulateLoadTime(pax_load_time, cargo_load_time)
+    local pax_variation = 0 -- avg math.random(-1, 1)
+    local cargo_variation = 0 -- avg math.random(-2, 2)
+    local total_pax_time = toLoadHub.pax_count * (pax_load_time + pax_variation)
+    local total_cargo_time = math.ceil(toLoadHub.cargo / toLoadHub.kgPerUnit) * (cargo_load_time + cargo_variation)
+
+    local total_time = math.max(total_pax_time, total_cargo_time)
+    local margin = 0.1 -- 10% margin error
+    total_time = total_time * (1 + margin) 
+    return math.floor(total_time / 60) -- mins returned
+end
+
 -- == Utility Functions ==
 function saveSettingsToFileToLoadHub(final)
     debug(string.format("[%s] saveSettingsToFileToLoadHub(%s)", toLoadHub.title, tostring(final)))
@@ -405,12 +418,12 @@ local function resetAirplaneParameters()
     toLoadHub_AftCargo = 0
     toLoadHub_FwdCargo = 0
     toLoadHub_PaxDistrib = 0.5
-
     toLoadHub.pax_count = 0
     toLoadHub.cargo = 0
     toLoadHub.cargo_aft = 0
     toLoadHub.cargo_fwd = 0
     toLoadHub.boarding_secnds_per_pax = 0
+    toLoadHub.set_default_seconds = false
     toLoadHub.boarding_secnds_per_cargo_unit = 0
     toLoadHub.next_boarding_check = os.time()
     toLoadHub.next_cargo_check = os.time()
@@ -624,11 +637,11 @@ end
 local function addingCargoFwdAft()
     local someChanges = false
     if toLoadHub_AftCargo < toLoadHub.cargo_aft then
-        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + (toLoadHub.kgPerUnit /2), toLoadHub.cargo_aft)
+        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + (toLoadHub.kgPerUnit * (math.random(45, 55) / 100)), toLoadHub.cargo_aft)
         someChanges = true
     end
     if toLoadHub_FwdCargo < toLoadHub.cargo_fwd then
-        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + (toLoadHub.kgPerUnit /2), toLoadHub.cargo_fwd)
+        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + (toLoadHub.kgPerUnit * (math.random(45, 55) / 100)), toLoadHub.cargo_fwd)
         someChanges = true
     end
     return someChanges
@@ -754,7 +767,7 @@ function viewToLoadHubWindow()
         toLoadHub.settings.general.window_height = vrwinHeight
         toLoadHub.settings.general.window_width = vrwinWidth
     end
-
+    
     if toLoadHub.error_message ~= nil then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
         imgui.TextUnformatted(toLoadHub.error_message)
@@ -1033,6 +1046,7 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted("Both doors are open and in use.")
             imgui.PopStyleColor()
             generalSpeed = 2
+            toLoadHub.set_default_seconds = false
         elseif areAllDoorsClosed() and
             ((toLoadHub.settings.door.open_boarding > 1 and not toLoadHub.phases.is_onboarded) or
             (toLoadHub.settings.door.open_deboarding > 1 and toLoadHub.phases.is_onboarded)) then
@@ -1040,21 +1054,23 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted("All passenger doors will be operated.")
             imgui.PopStyleColor()
             generalSpeed = 2
+            toLoadHub.set_default_seconds = false
         elseif toLoadHub.is_jetbridge then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("Jetbridge attached.")
             imgui.PopStyleColor()
             generalSpeed = 2
+            toLoadHub.set_default_seconds = false
         end
 
         if isAnyDoorOpen() or (toLoadHub.settings.door.open_boarding > 0 and not toLoadHub.phases.is_onboarded) or
            (toLoadHub.settings.door.open_deboarding > 0  and toLoadHub.phases.is_onboarded) then
-            local fastModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed + (generalSpeed / 3)) / 60)
-            local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed + (generalSpeed / 3)) / 60)
-            if toLoadHub.settings.general.simulate_cargo then
-                local fastModeCargoMinutes = math.floor( (toLoadHub.cargo * (toLoadHub.cargo_speeds[2] + (toLoadHub.cargo_speeds[2] / 3)) * 0.7) / (toLoadHub.kgPerUnit * 60))
-                local realModeCargoMinutes = math.floor( (toLoadHub.cargo * (toLoadHub.cargo_speeds[3] + (toLoadHub.cargo_speeds[3] / 3)) * 0.7) / (toLoadHub.kgPerUnit * 60))
+            local fastModeMinutes = simulateLoadTime(generalSpeed, 0)
+            local realModeMinutes = simulateLoadTime(generalSpeed *2, 0)
 
+            if toLoadHub.settings.general.simulate_cargo then
+                local fastModeCargoMinutes = simulateLoadTime(generalSpeed, toLoadHub.cargo_speeds[2])
+                local realModeCargoMinutes = simulateLoadTime(generalSpeed *2, toLoadHub.cargo_speeds[3])
                 fastModeMinutes = calculateTimeWithCargo(fastModeMinutes, fastModeCargoMinutes)
                 realModeMinutes = calculateTimeWithCargo(realModeMinutes, realModeCargoMinutes)
             end
@@ -1064,6 +1080,18 @@ function viewToLoadHubWindow()
             local labelReal = realModeMinutes < 1
                 and "Real (less than a minute)"
                 or string.format("Real (%d minute%s)", realModeMinutes, realModeMinutes > 1 and "s" or "")
+
+            if not toLoadHub.set_default_seconds then
+                toLoadHub.set_default_seconds = true
+                if toLoadHub.settings.general.boarding_speed == 1 then
+                    toLoadHub.boarding_secnds_per_pax = generalSpeed
+                    toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[2]
+                end
+                if toLoadHub.settings.general.boarding_speed == 2 then
+                    toLoadHub.boarding_secnds_per_pax = generalSpeed * 2
+                    toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[3]
+                end
+            end
 
             if imgui.RadioButton("Instant", toLoadHub.settings.general.boarding_speed == 0) then
                 toLoadHub.settings.general.boarding_speed = 0
@@ -1338,7 +1366,7 @@ function toloadHubMainLoop()
             else
                 toLoadHub_NoPax = toLoadHub_NoPax + 1
                 applyChange = true
-                toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-2, 2)
+                toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-1, 1)
             end
         end
         if toLoadHub_NoPax >= toLoadHub.pax_count then
