@@ -28,7 +28,7 @@ end
 local toLoadHub = {
     title = "ToLoadHUB",
     version = "0.13.0",
-    file = "toloadhub.ini" ,
+    file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
     pax_count = 0, -- old intendedPassengerNumber
@@ -666,7 +666,7 @@ local function sendLoadsheetToToliss(data)
     local loadSheetContent = ""
     if data.typeL < 2 then
         loadSheetContent = "/data2/313//NE/" .. table.concat({
-            "Loadsheet " .. data.labelText .. " " .. os.date((toloadhub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
+            "Loadsheet " .. data.labelText .. " " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("ZFW",  data.zfw, 9),
             formatRowLoadSheet("ZFWCG", data.zfwcg, 9),
             formatRowLoadSheet("GWCG", data.gwcg, 9),
@@ -677,13 +677,13 @@ local function sendLoadsheetToToliss(data)
         end
     elseif data.typeL == 2 then
         loadSheetContent = "/data2/323//NE/" .. table.concat({
-            "ACTUAL TIMES @-@ " .. os.date((toloadhub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
+            "ACTUAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Chock out", toLoadHub.chocks_out_time, 22),
             formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
         }, "\n")
     elseif data.typeL == 3 then
         loadSheetContent = "/data2/333//NE/" .. table.concat({
-            "ARRIVAL TIMES @-@ " .. os.date((toloadhub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
+            "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Landing", toLoadHub.chocks_on_time, 22),
             formatRowLoadSheet("Chock in", toLoadHub.chocks_in_time, 22),
         }, "\n")
@@ -1421,14 +1421,14 @@ function toloadHubMainLoop()
          -- Beacon for Chock Off Loadsheet --
         if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on > 0 and toLoadHub_parking_brake_ratio <=0.1 then
             toLoadHub.chocks_out_set = true
-            toLoadHub.chocks_out_time = os.date((toloadhub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
+            toLoadHub.chocks_out_time = os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 1
         end
         -- Take Off for Chock Off Loadsheet --
         if not toLoadHub.chocks_off_set and toLoadHub.is_onground and toLoadHub_onground_any < 1  then
             toLoadHub.is_onground = false
             toLoadHub.chocks_off_set = true
-            toLoadHub.chocks_off_time = os.date((toloadhub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
+            toLoadHub.chocks_off_time = os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 1
         end
 
@@ -1436,14 +1436,14 @@ function toloadHubMainLoop()
         if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_on_set and not toLoadHub.is_onground and toLoadHub_onground_any > 0 then
             toLoadHub.is_onground = true
             toLoadHub.chocks_on_set = true
-            toLoadHub.chocks_on_time = os.date((toloadhub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
+            toLoadHub.chocks_on_time = os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 5
         end
 
         -- Engine Off for Chock On Loadsheet --
         if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_in_set and toLoadHub_beacon_lights_on == 0 and isAllEngineOff() then
             toLoadHub.chocks_in_set = true
-            toLoadHub.chocks_in_time = os.date((toloadhub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
+            toLoadHub.chocks_in_time = os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 5
         end
 
