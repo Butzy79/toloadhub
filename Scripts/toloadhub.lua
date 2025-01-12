@@ -27,8 +27,8 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.12.2",
-    file = "toloadhub.ini" ,
+    version = "0.13.0",
+    file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
     pax_count = 0, -- old intendedPassengerNumber
@@ -82,6 +82,7 @@ local toLoadHub = {
         all_unloaded = false
     },
     boarding_secnds_per_pax = 0,
+    set_default_seconds = false,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     next_cargo_check = os.time(),
     wait_until_speak = os.time(),
@@ -145,6 +146,7 @@ local toLoadHub = {
             enable_loadsheet = true,
             preliminary_loadsheet = true,
             chocks_loadsheet = true,
+            utc_time = false,
         },
         door = {
             close_boarding = true,
@@ -244,6 +246,18 @@ end
 local function calculateTimeWithCargo(a, b)
     local res = a / 2 + b
     return (res < a and a) or (res < b and b) or res
+end
+
+local function simulateLoadTime(pax_load_time, cargo_load_time)
+    local pax_variation = 0 -- avg math.random(-1, 1)
+    local cargo_variation = 0 -- avg math.random(-2, 2)
+    local total_pax_time = toLoadHub.pax_count * (pax_load_time + pax_variation)
+    local total_cargo_time = (total_pax_time/2) + math.ceil(toLoadHub.cargo / toLoadHub.kgPerUnit) * (cargo_load_time + cargo_variation)
+
+    local total_time = math.max(total_pax_time, total_cargo_time)
+    local margin = 0.1 -- 10% margin error
+    total_time = total_time * (1 + margin) 
+    return math.floor(total_time / 60) -- mins returned
 end
 
 -- == Utility Functions ==
@@ -404,12 +418,12 @@ local function resetAirplaneParameters()
     toLoadHub_AftCargo = 0
     toLoadHub_FwdCargo = 0
     toLoadHub_PaxDistrib = 0.5
-
     toLoadHub.pax_count = 0
     toLoadHub.cargo = 0
     toLoadHub.cargo_aft = 0
     toLoadHub.cargo_fwd = 0
     toLoadHub.boarding_secnds_per_pax = 0
+    toLoadHub.set_default_seconds = false
     toLoadHub.boarding_secnds_per_cargo_unit = 0
     toLoadHub.next_boarding_check = os.time()
     toLoadHub.next_cargo_check = os.time()
@@ -623,11 +637,11 @@ end
 local function addingCargoFwdAft()
     local someChanges = false
     if toLoadHub_AftCargo < toLoadHub.cargo_aft then
-        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + (toLoadHub.kgPerUnit /2), toLoadHub.cargo_aft)
+        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + (toLoadHub.kgPerUnit * (math.random(40, 60) / 100)), toLoadHub.cargo_aft)
         someChanges = true
     end
     if toLoadHub_FwdCargo < toLoadHub.cargo_fwd then
-        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + (toLoadHub.kgPerUnit /2), toLoadHub.cargo_fwd)
+        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + (toLoadHub.kgPerUnit * (math.random(40, 60) / 100)), toLoadHub.cargo_fwd)
         someChanges = true
     end
     return someChanges
@@ -665,7 +679,7 @@ local function sendLoadsheetToToliss(data)
     local loadSheetContent = ""
     if data.typeL < 2 then
         loadSheetContent = "/data2/313//NE/" .. table.concat({
-            "Loadsheet " .. data.labelText .. " " .. os.date("%H:%M"),
+            "Loadsheet " .. data.labelText .. " " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("ZFW",  data.zfw, 9),
             formatRowLoadSheet("ZFWCG", data.zfwcg, 9),
             formatRowLoadSheet("GWCG", data.gwcg, 9),
@@ -676,13 +690,13 @@ local function sendLoadsheetToToliss(data)
         end
     elseif data.typeL == 2 then
         loadSheetContent = "/data2/323//NE/" .. table.concat({
-            "ACTUAL TIMES @-@ " .. os.date("%H:%M"),
+            "ACTUAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Chock out", toLoadHub.chocks_out_time, 22),
             formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
         }, "\n")
     elseif data.typeL == 3 then
         loadSheetContent = "/data2/333//NE/" .. table.concat({
-            "ARRIVAL TIMES @-@ " .. os.date("%H:%M"),
+            "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Landing", toLoadHub.chocks_on_time, 22),
             formatRowLoadSheet("Chock in", toLoadHub.chocks_in_time, 22),
         }, "\n")
@@ -1032,6 +1046,7 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted("Both doors are open and in use.")
             imgui.PopStyleColor()
             generalSpeed = 2
+            toLoadHub.set_default_seconds = false
         elseif areAllDoorsClosed() and
             ((toLoadHub.settings.door.open_boarding > 1 and not toLoadHub.phases.is_onboarded) or
             (toLoadHub.settings.door.open_deboarding > 1 and toLoadHub.phases.is_onboarded)) then
@@ -1039,20 +1054,23 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted("All passenger doors will be operated.")
             imgui.PopStyleColor()
             generalSpeed = 2
+            toLoadHub.set_default_seconds = false
         elseif toLoadHub.is_jetbridge then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("Jetbridge attached.")
             imgui.PopStyleColor()
             generalSpeed = 2
+            toLoadHub.set_default_seconds = false
         end
 
         if isAnyDoorOpen() or (toLoadHub.settings.door.open_boarding > 0 and not toLoadHub.phases.is_onboarded) or
            (toLoadHub.settings.door.open_deboarding > 0  and toLoadHub.phases.is_onboarded) then
-            local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
-            local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
+            local fastModeMinutes = simulateLoadTime(generalSpeed, 0)
+            local realModeMinutes = simulateLoadTime(generalSpeed *2, 0)
+
             if toLoadHub.settings.general.simulate_cargo then
-                local fastModeCargoMinutes = math.floor(((toLoadHub.cargo * toLoadHub.cargo_speeds[2] * 0.7) / toLoadHub.kgPerUnit) / 60 + 0.3)
-                local realModeCargoMinutes = math.floor(((toLoadHub.cargo * toLoadHub.cargo_speeds[3] * 0.7) / toLoadHub.kgPerUnit) / 60 + 0.3)
+                local fastModeCargoMinutes = simulateLoadTime(generalSpeed, toLoadHub.cargo_speeds[2])
+                local realModeCargoMinutes = simulateLoadTime(generalSpeed *2, toLoadHub.cargo_speeds[3])
                 fastModeMinutes = calculateTimeWithCargo(fastModeMinutes, fastModeCargoMinutes)
                 realModeMinutes = calculateTimeWithCargo(realModeMinutes, realModeCargoMinutes)
             end
@@ -1062,6 +1080,18 @@ function viewToLoadHubWindow()
             local labelReal = realModeMinutes < 1
                 and "Real (less than a minute)"
                 or string.format("Real (%d minute%s)", realModeMinutes, realModeMinutes > 1 and "s" or "")
+
+            if not toLoadHub.set_default_seconds then
+                toLoadHub.set_default_seconds = true
+                if toLoadHub.settings.general.boarding_speed == 1 then
+                    toLoadHub.boarding_secnds_per_pax = generalSpeed
+                    toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[2]
+                end
+                if toLoadHub.settings.general.boarding_speed == 2 then
+                    toLoadHub.boarding_secnds_per_pax = generalSpeed * 2
+                    toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[3]
+                end
+            end
 
             if imgui.RadioButton("Instant", toLoadHub.settings.general.boarding_speed == 0) then
                 toLoadHub.settings.general.boarding_speed = 0
@@ -1187,6 +1217,9 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Loadsheet for chocks on and off", toLoadHub.settings.hoppie.chocks_loadsheet)
     if changed then toLoadHub.settings.hoppie.chocks_loadsheet , setSave = newval, true end
+
+    changed, newval = imgui.Checkbox("Display Loadsheet in UTC", toLoadHub.settings.hoppie.utc_time)
+    if changed then toLoadHub.settings.hoppie.utc_time , setSave = newval, true end
 
     imgui.TextUnformatted("Secret:")
     local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
@@ -1333,7 +1366,7 @@ function toloadHubMainLoop()
             else
                 toLoadHub_NoPax = toLoadHub_NoPax + 1
                 applyChange = true
-                toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-2, 2)
+                toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-1, 1)
             end
         end
         if toLoadHub_NoPax >= toLoadHub.pax_count then
@@ -1417,14 +1450,14 @@ function toloadHubMainLoop()
          -- Beacon for Chock Off Loadsheet --
         if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on > 0 and toLoadHub_parking_brake_ratio <=0.1 then
             toLoadHub.chocks_out_set = true
-            toLoadHub.chocks_out_time = os.date("%H:%M")
+            toLoadHub.chocks_out_time = os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 1
         end
         -- Take Off for Chock Off Loadsheet --
         if not toLoadHub.chocks_off_set and toLoadHub.is_onground and toLoadHub_onground_any < 1  then
             toLoadHub.is_onground = false
             toLoadHub.chocks_off_set = true
-            toLoadHub.chocks_off_time = os.date("%H:%M")
+            toLoadHub.chocks_off_time = os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 1
         end
 
@@ -1432,14 +1465,14 @@ function toloadHubMainLoop()
         if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_on_set and not toLoadHub.is_onground and toLoadHub_onground_any > 0 then
             toLoadHub.is_onground = true
             toLoadHub.chocks_on_set = true
-            toLoadHub.chocks_on_time = os.date("%H:%M")
+            toLoadHub.chocks_on_time = os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 5
         end
 
         -- Engine Off for Chock On Loadsheet --
         if toLoadHub.hoppie.loadsheet_chocks_off_sent and not toLoadHub.chocks_in_set and toLoadHub_beacon_lights_on == 0 and isAllEngineOff() then
             toLoadHub.chocks_in_set = true
-            toLoadHub.chocks_in_time = os.date("%H:%M")
+            toLoadHub.chocks_in_time = os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M")
             toLoadHub.hoppie.loadsheet_check = os.time() + 5
         end
 
