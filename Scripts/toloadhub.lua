@@ -83,6 +83,9 @@ local toLoadHub = {
     },
     boarding_secnds_per_pax = 0,
     set_default_seconds = false,
+    simulate_result = false,
+    simulate_fast_value = 0,
+    simulate_real_value = 0,
     next_boarding_check = os.time(), -- old nextTimeBoardingCheck
     next_cargo_check = os.time(),
     wait_until_speak = os.time(),
@@ -249,15 +252,35 @@ local function calculateTimeWithCargo(a, b)
 end
 
 local function simulateLoadTime(pax_load_time, cargo_load_time)
-    local pax_variation = 0 -- avg math.random(-1, 1)
-    local cargo_variation = 0 -- avg math.random(-2, 2)
-    local total_pax_time = toLoadHub.pax_count * (pax_load_time + pax_variation)
-    local total_cargo_time = (total_pax_time/2) + math.ceil(toLoadHub.cargo / toLoadHub.kgPerUnit) * (cargo_load_time + cargo_variation)
+    local now = 1
+    local next_pax_time = pax_load_time
+    local next_cargo_time = cargo_load_time
 
-    local total_time = math.max(total_pax_time, total_cargo_time)
-    local margin = 0.1 -- 10% margin error
-    total_time = total_time * (1 + margin) 
-    return math.floor(total_time / 60) -- mins returned
+    local pax_on = 0
+    local cargo_on = 0
+    local cargo_start = false
+
+    local cargo_starts_at = math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2])
+    if cargo_load_time == 0 then
+        cargo_on = toLoadHub.cargo
+    end
+    while pax_on < toLoadHub.pax_count or cargo_on < toLoadHub.cargo do
+        if now >= next_pax_time and pax_on < toLoadHub.pax_count then
+            pax_on = pax_on + 1
+            next_pax_time = now + pax_load_time + math.random(-2, 2)
+        end
+        
+        if not cargo_start and pax_on >= toLoadHub.pax_count * (cargo_starts_at / 100) then
+            cargo_start = true
+        end
+
+        if cargo_start and now >= next_cargo_time and cargo_on < toLoadHub.cargo then
+            cargo_on = cargo_on + toLoadHub.kgPerUnit
+            next_cargo_time = now + cargo_load_time + math.random(-2, 2)
+        end
+        now = now + 1
+    end
+    return math.floor(now / 60)
 end
 
 -- == Utility Functions ==
@@ -423,6 +446,9 @@ local function resetAirplaneParameters()
     toLoadHub.cargo_aft = 0
     toLoadHub.cargo_fwd = 0
     toLoadHub.boarding_secnds_per_pax = 0
+    toLoadHub.simulate_result = false
+    toLoadHub.simulate_fast_value = 0
+    toLoadHub.simulate_real_value = 0
     toLoadHub.set_default_seconds = false
     toLoadHub.boarding_secnds_per_cargo_unit = 0
     toLoadHub.next_boarding_check = os.time()
@@ -808,19 +834,23 @@ function viewToLoadHubWindow()
         local passengeraNumberChanged, newPassengerNumber = imgui.SliderInt("Passengers number", toLoadHub.pax_count, 0, toLoadHub.max_passenger, "Value: %d")
         if passengeraNumberChanged then
             toLoadHub.pax_count = newPassengerNumber
+            toLoadHub.simulate_result = false
         end
         local cargoNumberChanged, newCargoNumber = imgui.SliderInt("Cargo " .. toLoadHub.unitLabel, writeInUnitKg(toLoadHub.cargo), 0, writeInUnitKg(toLoadHub.max_cargo_aft + toLoadHub.max_cargo_aft), "Value: %d")
         if cargoNumberChanged then
             toLoadHub.cargo = writeInUnitLbs(newCargoNumber)
+            toLoadHub.simulate_result = false
         end
 
 
         if imgui.Button("Get from Simbrief") then
             fetchSimbriefFPlan()
+            toLoadHub.simulate_result = false
         end
         imgui.SameLine(155)
         if imgui.Button("Set random passenger number") then
             setRandomNumberOfPassengers()
+            toLoadHub.simulate_result = false
         end
 
         if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) then
@@ -838,10 +868,12 @@ function viewToLoadHubWindow()
                 if not allDoorsOpen() then
                     if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
                         toLoadHub.is_jetbridge = false
+                        toLoadHub.simulate_result = false
                     end
                     imgui.SameLine(100)
                     if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
                         toLoadHub.is_jetbridge = true
+                        toLoadHub.simulate_result = false
                     end
                 end
             else
@@ -1065,15 +1097,23 @@ function viewToLoadHubWindow()
 
         if isAnyDoorOpen() or (toLoadHub.settings.door.open_boarding > 0 and not toLoadHub.phases.is_onboarded) or
            (toLoadHub.settings.door.open_deboarding > 0  and toLoadHub.phases.is_onboarded) then
-            local fastModeMinutes = simulateLoadTime(generalSpeed, 0)
-            local realModeMinutes = simulateLoadTime(generalSpeed *2, 0)
+            local fastModeMinutes = toLoadHub.simulate_fast_value
+            local realModeMinutes = toLoadHub.simulate_real_value
 
-            if toLoadHub.settings.general.simulate_cargo then
-                local fastModeCargoMinutes = simulateLoadTime(generalSpeed, toLoadHub.cargo_speeds[2])
-                local realModeCargoMinutes = simulateLoadTime(generalSpeed *2, toLoadHub.cargo_speeds[3])
-                fastModeMinutes = calculateTimeWithCargo(fastModeMinutes, fastModeCargoMinutes)
-                realModeMinutes = calculateTimeWithCargo(realModeMinutes, realModeCargoMinutes)
+            if not toLoadHub.simulate_result then
+                toLoadHub.simulate_result = true
+                fastModeMinutes = simulateLoadTime(generalSpeed, 0)
+                realModeMinutes = simulateLoadTime(generalSpeed *2, 0)
+                if toLoadHub.settings.general.simulate_cargo then
+                    local fastModeCargoMinutes = simulateLoadTime(generalSpeed, toLoadHub.cargo_speeds[2])
+                    local realModeCargoMinutes = simulateLoadTime(generalSpeed *2, toLoadHub.cargo_speeds[3])
+                    fastModeMinutes = calculateTimeWithCargo(fastModeMinutes, fastModeCargoMinutes)
+                    realModeMinutes = calculateTimeWithCargo(realModeMinutes, realModeCargoMinutes)
+                end
+                toLoadHub.simulate_fast_value = fastModeMinutes
+                toLoadHub.simulate_real_value = realModeMinutes
             end
+
             local labelFast = fastModeMinutes < 1
                 and "Fast (less than a minute)"
                 or string.format("Fast (%d minute%s)", fastModeMinutes, fastModeMinutes > 1 and "s" or "")
@@ -1094,18 +1134,21 @@ function viewToLoadHubWindow()
             end
 
             if imgui.RadioButton("Instant", toLoadHub.settings.general.boarding_speed == 0) then
+                toLoadHub.simulate_result = false
                 toLoadHub.settings.general.boarding_speed = 0
                 toLoadHub.boarding_secnds_per_pax = 0
                 toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[1]
             end
 
             if imgui.RadioButton(labelFast, toLoadHub.settings.general.boarding_speed == 1) then
+                toLoadHub.simulate_result = false
                 toLoadHub.settings.general.boarding_speed = 1
                 toLoadHub.boarding_secnds_per_pax = generalSpeed
                 toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[2]
             end
 
             if imgui.RadioButton(labelReal, toLoadHub.settings.general.boarding_speed == 2) then
+                toLoadHub.simulate_result = false
                 toLoadHub.settings.general.boarding_speed = 2
                 toLoadHub.boarding_secnds_per_pax = generalSpeed * 2
                 toLoadHub.boarding_secnds_per_cargo_unit = toLoadHub.cargo_speeds[3]
@@ -1250,16 +1293,19 @@ function viewToLoadHubWindowSettings()
     imgui.TextUnformatted("Auto Open Doors before Boarding:")
     if imgui.RadioButton("No##boarding", toLoadHub.settings.door.open_boarding == 0) then
         toLoadHub.settings.door.open_boarding = 0
+        toLoadHub.simulate_result = false
         setSave = true
     end
     imgui.SameLine(55)
     if imgui.RadioButton("Yes, Front Door Only##boarding", toLoadHub.settings.door.open_boarding == 1) then
         toLoadHub.settings.door.open_boarding = 1
         setSave = true
+        toLoadHub.simulate_result = false
     end
     imgui.SameLine(230)
     if imgui.RadioButton("Yes, All Doors##boarding", toLoadHub.settings.door.open_boarding == 2) then
         toLoadHub.settings.door.open_boarding = 2
+        toLoadHub.simulate_result = false
         setSave = true
     end
     imgui.Spacing()
@@ -1267,16 +1313,19 @@ function viewToLoadHubWindowSettings()
     imgui.TextUnformatted("Auto Open Doors before Deboarding:")
     if imgui.RadioButton("No##deboarding", toLoadHub.settings.door.open_deboarding == 0) then
         toLoadHub.settings.door.open_deboarding = 0
+        toLoadHub.simulate_result = false
         setSave = true
     end
     imgui.SameLine(55)
     if imgui.RadioButton("Yes, Front Door Only##deboarding", toLoadHub.settings.door.open_deboarding == 1) then
         toLoadHub.settings.door.open_deboarding = 1
+        toLoadHub.simulate_result = false
         setSave = true
     end
     imgui.SameLine(230)
     if imgui.RadioButton("Yes, All Doors##deboarding", toLoadHub.settings.door.open_deboarding == 2) then
         toLoadHub.settings.door.open_deboarding = 2
+        toLoadHub.simulate_result = false
         setSave = true
     end
 
