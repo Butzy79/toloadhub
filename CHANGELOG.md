@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.  
 The format is based on [Keep a Changelog](https://keepachangelog.com/),  
 and this project adheres to [Semantic Versioning](https://semver.org/).
+## [0.14.0]- 2025-01-13
+### Adde
+- Arrival times loadsheet with fuel status
+
 ## [0.13.0]- 2025-01-12
 ### Added
 - Time is shown in local time by default. You can set it to UTC in the Hoppie settings section.

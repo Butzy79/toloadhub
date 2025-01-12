@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.13.0",
+    version = "0.14.0",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -119,6 +119,8 @@ local toLoadHub = {
         cargo = nil,
         pax_count = nil,
         est_zfw = nil,
+        total_burn = nil,
+        taxi = nil,
         units = nil,
     },
     settings = {
@@ -342,6 +344,11 @@ local function fetchSimbriefFPlan()
     
     local plan_ramp = xml_data:find("plan_ramp")
     toLoadHub.simbrief.plan_ramp = tonumber(plan_ramp[1])
+
+    local total_burn = xml_data:find("total_burn")
+    toLoadHub.simbrief.total_burn = tonumber(total_burn[1])
+    local taxi = xml_data:find("taxi")
+    toLoadHub.simbrief.taxi = tonumber(taxi[1])
 
     local freight_added = xml_data:find("freight_added")
     if toLoadHub.simbrief.units:lower() == 'lbs' then
@@ -682,10 +689,18 @@ local function sendLoadsheetToToliss(data)
             formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
         }, "\n")
     elseif data.typeL == 3 then
+        local consumption = (toLoadHub.simbrief.plan_ramp - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub_WriteFOB_XP)
+        local lblSaving = "Used as Planned"
+        if consumption < 0 then
+            lblSaving = "Saved " .. consumption .. toLoadHub.unitLabel
+        elseif consumption > 0 then
+            lblSaving = "Burned " .. consumption .. toLoadHub.unitLabel
+        end
         loadSheetContent = "/data2/333//NE/" .. table.concat({
             "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Landing", toLoadHub.chocks_on_time, 22),
             formatRowLoadSheet("Chock in", toLoadHub.chocks_in_time, 22),
+            "Fuel Info: " .. lblSaving,
         }, "\n")
     end
 
@@ -1547,7 +1562,7 @@ function toloadHubMainLoop()
         end
         data_f.gwcg = string.format("%.1f",toLoadHub_currentCG)
         data_f.f_blk = string.format("%.1f",writeInUnitKg(toLoadHub_WriteFOB_XP)/1000)
-        if toLoadHub.simbrief.plan_ramp ~= nil and writeInUnitKg(toLoadHub_WriteFOB_XP) + 20 < toLoadHub.simbrief.plan_ramp then
+        if toLoadHub.simbrief.plan_ramp ~= nil and writeInUnitKg(toLoadHub_WriteFOB_XP) + 80 < toLoadHub.simbrief.plan_ramp then
             data_f.warning = string.format("%.1f",toLoadHub.simbrief.plan_ramp/1000)
         end
         sendLoadsheetToToliss(data_f)
