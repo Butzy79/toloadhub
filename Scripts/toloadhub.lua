@@ -252,7 +252,7 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
     local pax_variation = 0 -- avg math.random(-1, 1)
     local cargo_variation = 0 -- avg math.random(-2, 2)
     local total_pax_time = toLoadHub.pax_count * (pax_load_time + pax_variation)
-    local total_cargo_time = math.ceil(toLoadHub.cargo / toLoadHub.kgPerUnit) * (cargo_load_time + cargo_variation)
+    local total_cargo_time = (total_pax_time/2) + math.ceil(toLoadHub.cargo / toLoadHub.kgPerUnit) * (cargo_load_time + cargo_variation)
 
     local total_time = math.max(total_pax_time, total_cargo_time)
     local margin = 0.1 -- 10% margin error
@@ -637,11 +637,11 @@ end
 local function addingCargoFwdAft()
     local someChanges = false
     if toLoadHub_AftCargo < toLoadHub.cargo_aft then
-        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + (toLoadHub.kgPerUnit * (math.random(40, 55) / 100)), toLoadHub.cargo_aft)
+        toLoadHub_AftCargo = math.min(toLoadHub_AftCargo + (toLoadHub.kgPerUnit * (math.random(40, 60) / 100)), toLoadHub.cargo_aft)
         someChanges = true
     end
     if toLoadHub_FwdCargo < toLoadHub.cargo_fwd then
-        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + (toLoadHub.kgPerUnit * (math.random(40, 55) / 100)), toLoadHub.cargo_fwd)
+        toLoadHub_FwdCargo = math.min(toLoadHub_FwdCargo + (toLoadHub.kgPerUnit * (math.random(40, 60) / 100)), toLoadHub.cargo_fwd)
         someChanges = true
     end
     return someChanges
