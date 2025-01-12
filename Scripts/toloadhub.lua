@@ -1049,11 +1049,12 @@ function viewToLoadHubWindow()
 
         if isAnyDoorOpen() or (toLoadHub.settings.door.open_boarding > 0 and not toLoadHub.phases.is_onboarded) or
            (toLoadHub.settings.door.open_deboarding > 0  and toLoadHub.phases.is_onboarded) then
-            local fastModeMinutes = math.floor(toLoadHub.pax_count * generalSpeed / 60 + 0.5)
-            local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed * 2) / 60 + 0.5)
+            local fastModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed + (generalSpeed / 3)) / 60)
+            local realModeMinutes = math.floor(toLoadHub.pax_count * (generalSpeed + (generalSpeed / 3)) / 60)
             if toLoadHub.settings.general.simulate_cargo then
-                local fastModeCargoMinutes = math.floor(((toLoadHub.cargo * toLoadHub.cargo_speeds[2] * 0.7) / toLoadHub.kgPerUnit) / 60 + 0.3)
-                local realModeCargoMinutes = math.floor(((toLoadHub.cargo * toLoadHub.cargo_speeds[3] * 0.7) / toLoadHub.kgPerUnit) / 60 + 0.3)
+                local fastModeCargoMinutes = math.floor( (toLoadHub.cargo * (toLoadHub.cargo_speeds[2] + (toLoadHub.cargo_speeds[2] / 3)) * 0.7) / (toLoadHub.kgPerUnit * 60))
+                local realModeCargoMinutes = math.floor( (toLoadHub.cargo * (toLoadHub.cargo_speeds[3] + (toLoadHub.cargo_speeds[3] / 3)) * 0.7) / (toLoadHub.kgPerUnit * 60))
+
                 fastModeMinutes = calculateTimeWithCargo(fastModeMinutes, fastModeCargoMinutes)
                 realModeMinutes = calculateTimeWithCargo(realModeMinutes, realModeCargoMinutes)
             end
