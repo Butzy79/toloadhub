@@ -137,6 +137,7 @@ local toLoadHub = {
             auto_open = true,
             auto_init = true,
             simulate_cargo = true,
+            concourrent_cargo = false,
             boarding_speed = 0,
             simulate_jdgh = false,
             is_lbs = false
@@ -263,6 +264,9 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
     local cargo_start = false
 
     local cargo_starts_at = math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2])
+    if toLoadHub.settings.general.concourrent_cargo then
+        cargo_starts_at = 0
+    end
     if cargo_load_time == 0 then
         cargo_on = toLoadHub.cargo
     end
@@ -664,7 +668,11 @@ local function focusOnToLoadHub()
 end
 
 local function isNoPaxInRangeForCargo()
-    return toLoadHub_NoPax >= toLoadHub.pax_count * (math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2]) / 100)
+    if toLoadHub.settings.general.concourrent_cargo then
+        return true
+    else
+        return toLoadHub_NoPax >= toLoadHub.pax_count * (math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2]) / 100)
+    end
 end
 
 local function addingCargoFwdAft()
@@ -731,9 +739,9 @@ local function sendLoadsheetToToliss(data)
         local consumption = (toLoadHub.simbrief.plan_ramp - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub_WriteFOB_XP)
         local lblSaving = "Used as Planned"
         if consumption < 0 then
-            lblSaving = "Saved " .. consumption .. toLoadHub.unitLabel
+            lblSaving = "Saved @" ..  math.abs(consumption) .. "@ " .. toLoadHub.unitLabel
         elseif consumption > 0 then
-            lblSaving = "Burned " .. consumption .. toLoadHub.unitLabel
+            lblSaving = "Burned @" ..  math.abs(consumption) .. "@ " .. toLoadHub.unitLabel
         end
         loadSheetContent = "/data2/333//NE/" .. table.concat({
             "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
@@ -1219,6 +1227,9 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
     if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
+
+    changed, newval = imgui.Checkbox("Load cargo with pax boarding", toLoadHub.settings.general.concourrent_cargo)
+    if changed then toLoadHub.settings.general.concourrent_cargo , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Use Imperial Units", toLoadHub.settings.general.is_lbs)
     if changed then toLoadHub.settings.general.is_lbs , setSave = newval, true end
