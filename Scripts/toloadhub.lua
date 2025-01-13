@@ -739,9 +739,9 @@ local function sendLoadsheetToToliss(data)
         local consumption = (toLoadHub.simbrief.plan_ramp - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub_WriteFOB_XP)
         local lblSaving = "Used as Planned"
         if consumption < 0 then
-            lblSaving = "Saved @" ..  math.abs(consumption) .. "@ " .. toLoadHub.unitLabel
+            lblSaving = "Save @" .. consumption .. "@ " .. toLoadHub.unitLabel
         elseif consumption > 0 then
-            lblSaving = "Burned @" ..  math.abs(consumption) .. "@ " .. toLoadHub.unitLabel
+            lblSaving = "Exceed @+" ..  consumption .. "@ " .. toLoadHub.unitLabel
         end
         loadSheetContent = "/data2/333//NE/" .. table.concat({
             "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
