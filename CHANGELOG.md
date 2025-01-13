@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.14.0]- 2025-01-13
 ### Adde
 - Arrival times loadsheet with fuel status
+- In settings, you can now enable simultaneous cargo loading with passenger boarding.
 
 ## [0.13.0]- 2025-01-12
 ### Added
