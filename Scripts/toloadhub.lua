@@ -1110,7 +1110,7 @@ function viewToLoadHubWindow()
             imgui.PopStyleColor()
             generalSpeed = 2
             toLoadHub.set_default_seconds = false
-        elseif toLoadHub.is_jetbridge then
+        elseif toLoadHub.is_jetbridge and isAnyDoorOpen() then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("Jetbridge attached.")
             imgui.PopStyleColor()
