@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.13.0",
+    version = "0.14.0",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -123,6 +123,8 @@ local toLoadHub = {
         cargo = nil,
         pax_count = nil,
         est_zfw = nil,
+        total_burn = nil,
+        taxi = nil,
         units = nil,
     },
     settings = {
@@ -135,6 +137,7 @@ local toLoadHub = {
             auto_open = true,
             auto_init = true,
             simulate_cargo = true,
+            concourrent_cargo = false,
             boarding_speed = 0,
             simulate_jdgh = false,
             is_lbs = false
@@ -261,6 +264,9 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
     local cargo_start = false
 
     local cargo_starts_at = math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2])
+    if toLoadHub.settings.general.concourrent_cargo then
+        cargo_starts_at = 0
+    end
     if cargo_load_time == 0 then
         cargo_on = toLoadHub.cargo
     end
@@ -378,6 +384,11 @@ local function fetchSimbriefFPlan()
     
     local plan_ramp = xml_data:find("plan_ramp")
     toLoadHub.simbrief.plan_ramp = tonumber(plan_ramp[1])
+
+    local total_burn = xml_data:find("total_burn")
+    toLoadHub.simbrief.total_burn = tonumber(total_burn[1])
+    local taxi = xml_data:find("taxi")
+    toLoadHub.simbrief.taxi = tonumber(taxi[1])
 
     local freight_added = xml_data:find("freight_added")
     if toLoadHub.simbrief.units:lower() == 'lbs' then
@@ -657,7 +668,11 @@ local function focusOnToLoadHub()
 end
 
 local function isNoPaxInRangeForCargo()
-    return toLoadHub_NoPax >= toLoadHub.pax_count * (math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2]) / 100)
+    if toLoadHub.settings.general.concourrent_cargo then
+        return true
+    else
+        return toLoadHub_NoPax >= toLoadHub.pax_count * (math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2]) / 100)
+    end
 end
 
 local function addingCargoFwdAft()
@@ -721,10 +736,18 @@ local function sendLoadsheetToToliss(data)
             formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
         }, "\n")
     elseif data.typeL == 3 then
+        local consumption = (toLoadHub.simbrief.plan_ramp - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub_WriteFOB_XP)
+        local lblSaving = "Used as Planned"
+        if consumption < 0 then
+            lblSaving = "Save @" .. consumption .. "@ " .. toLoadHub.unitLabel
+        elseif consumption > 0 then
+            lblSaving = "Exceed @+" ..  consumption .. "@ " .. toLoadHub.unitLabel
+        end
         loadSheetContent = "/data2/333//NE/" .. table.concat({
             "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Landing", toLoadHub.chocks_on_time, 22),
             formatRowLoadSheet("Chock in", toLoadHub.chocks_in_time, 22),
+            "Fuel Info: " .. lblSaving,
         }, "\n")
     end
 
@@ -1087,7 +1110,7 @@ function viewToLoadHubWindow()
             imgui.PopStyleColor()
             generalSpeed = 2
             toLoadHub.set_default_seconds = false
-        elseif toLoadHub.is_jetbridge then
+        elseif toLoadHub.is_jetbridge and isAnyDoorOpen() then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("Jetbridge attached.")
             imgui.PopStyleColor()
@@ -1204,6 +1227,9 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
     if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
+
+    changed, newval = imgui.Checkbox("Load cargo with pax boarding", toLoadHub.settings.general.concourrent_cargo)
+    if changed then toLoadHub.settings.general.concourrent_cargo , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Use Imperial Units", toLoadHub.settings.general.is_lbs)
     if changed then toLoadHub.settings.general.is_lbs , setSave = newval, true end
@@ -1624,7 +1650,7 @@ function toloadHubMainLoop()
         end
         data_f.gwcg = string.format("%.1f",toLoadHub_currentCG)
         data_f.f_blk = string.format("%.1f",writeInUnitKg(toLoadHub_WriteFOB_XP)/1000)
-        if toLoadHub.simbrief.plan_ramp ~= nil and writeInUnitKg(toLoadHub_WriteFOB_XP) + 20 < toLoadHub.simbrief.plan_ramp then
+        if toLoadHub.simbrief.plan_ramp ~= nil and writeInUnitKg(toLoadHub_WriteFOB_XP) + 80 < toLoadHub.simbrief.plan_ramp then
             data_f.warning = string.format("%.1f",toLoadHub.simbrief.plan_ramp/1000)
         end
         sendLoadsheetToToliss(data_f)
