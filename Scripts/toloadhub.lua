@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.14.0",
+    version = "1.0.0",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -36,6 +36,8 @@ local toLoadHub = {
     max_cargo_fwd = 3000,
     max_cargo_aft = 5000,
     max_fuel = 20000,
+    fuel_engines_on = nil,
+    fuel_engines_off = nil,
     cargo = 0,
     error_message = nil,
     cargo_aft = 0,
@@ -43,7 +45,7 @@ local toLoadHub = {
     pax_distribution_range = {35, 60},
     cargo_fwd_distribution_range = {55, 75},
     cargo_starting_range = {45, 60},
-    cargo_speeds = {0, 10, 13},
+    cargo_speeds = {0, 6, 12},
     kgPerUnit = 25,
     first_init = false,
     is_lbs = false,
@@ -419,6 +421,16 @@ local function isAllEngineOff()
     return all_zero
 end
 
+local function isAnyEngineBurningFuel()
+    local engine = dataref_table("sim/flightmodel2/engines/engine_is_burning_fuel")
+    local all_zero = false
+    if engine[0] == 1 or engine[1] == 1 or engine[2] == 1 or engine[3] == 1 then
+        all_zero = true
+    end
+    return all_zero
+end
+
+
 local function setAirplaneNumbers()
     if PLANE_ICAO == "A319" then
         toLoadHub.max_passenger = 145
@@ -484,6 +496,8 @@ local function resetAirplaneParameters()
     toLoadHub.full_deboard_sound = false
     toLoadHub.is_onground = true
     toLoadHub.error_message = nil
+    toLoadHub.fuel_engines_on = nil
+    toLoadHub.fuel_engines_off = nil
     for key in pairs(toLoadHub.hoppie) do
         if key == "loadsheet_check" then
             toLoadHub.hoppie[key] = os.time()
@@ -736,7 +750,8 @@ local function sendLoadsheetToToliss(data)
             formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
         }, "\n")
     elseif data.typeL == 3 then
-        local consumption = (toLoadHub.simbrief.plan_ramp - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub_WriteFOB_XP)
+        local consumption = (writeInUnitKg(toLoadHub.fuel_engines_on) - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub.fuel_engines_off)
+
         local lblSaving = "Used as Planned"
         if consumption < 0 then
             lblSaving = "Save @" .. consumption .. "@ " .. toLoadHub.unitLabel
@@ -1431,6 +1446,14 @@ function toloadHubMainLoop()
         end
     elseif toLoadHub.phases.is_ready_to_start and not toLoadHub.phases.is_gh_started and now > toLoadHub.next_ready_to_start_check - 20 and toloadHub_jdexe == 0 then
         toloadHub_jdexe = 1
+    end
+
+    -- Fuel Start and Stop
+    if toLoadHub.fuel_engines_on == nil and toLoadHub.fuel_engines_off == nil and isAnyEngineBurningFuel() then
+        toLoadHub.fuel_engines_on = toLoadHub_WriteFOB_XP
+    end
+    if toLoadHub.phases.is_flying and toLoadHub.phases.is_landed and toLoadHub.fuel_engines_on ~= nil and toLoadHub.fuel_engines_off == nil and not isAnyEngineBurningFuel() then
+        toLoadHub.fuel_engines_off = toLoadHub_WriteFOB_XP
     end
 
     -- Onboarding Phase and Finishing Onboarding
