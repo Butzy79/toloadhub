@@ -39,6 +39,7 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Preliminary Loadsheet Only for Long-haul (+7hrs)**: Sends a preliminary loadsheet if a valid SimBrief plan exists, the flight number matches between SimBrief and the MCDU, and this option is enabled. The preliminary loadsheet can also be sent for all flights if not enabled.  
 - **Loadsheet for chocks on and off**:  Sends a CPDLC message at FL100 with chocks-off and takeoff times, and another after you turn off your beacon and engines, including landing.
 - **Display Loadsheet in UTC**:  If it is checked, loadsheet times are displayed in UTC.
+- **Display Pax In Loadsheet**: If it is checked, loadsheet will display pax value.
 
 ### Door Settings  
 - **Close Doors after Boarding**: Automatically closes doors after boarding is completed.  
