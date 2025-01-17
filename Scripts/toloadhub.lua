@@ -742,7 +742,7 @@ local function sendLoadsheetToToliss(data)
             formatRowLoadSheet("GWCG", data.gwcg, 9),
             formatRowLoadSheet("F.BLK", data.f_blk, 9),
         }, "\n")
-        if toLoadHub.settings.hoppie.display_pax and data.pax and data.pax ~= "" then
+        if toLoadHub.settings.hoppie.display_pax and data.pax ~= "" then
             loadSheetContent = loadSheetContent .. "\n" .. formatRowLoadSheet("PAX", data.pax, 9)
         end
         if data.warning ~= "" then
@@ -1679,7 +1679,6 @@ function toloadHubMainLoop()
         else
             data_f.zfwcg = string.format("%.1f",toLoadHub_zfwCG)
         end
-        data_f.pax = ""
         if toLoadHub.settings.hoppie.display_pax then
             data_f.pax = string.format(toLoadHub.pax_count)
         end
