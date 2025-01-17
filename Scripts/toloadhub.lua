@@ -155,6 +155,7 @@ local toLoadHub = {
             preliminary_loadsheet = true,
             chocks_loadsheet = true,
             utc_time = false,
+            display_pax = false,
         },
         door = {
             close_boarding = true,
@@ -175,7 +176,8 @@ local loadsheetStructure = {
             zfw = "",
             zfwcg = "",
             gwcg = "",
-            f_blk = ""
+            f_blk = "",
+            pax = ""
         }
         setmetatable(obj, self)
         self.__index = self
@@ -740,6 +742,9 @@ local function sendLoadsheetToToliss(data)
             formatRowLoadSheet("GWCG", data.gwcg, 9),
             formatRowLoadSheet("F.BLK", data.f_blk, 9),
         }, "\n")
+        if toLoadHub.settings.hoppie.display_pax and data.pax and data.pax ~= "" then
+            loadSheetContent = loadSheetContent .. "\n" .. formatRowLoadSheet("PAX", data.pax, 9)
+        end
         if data.warning ~= "" then
             loadSheetContent = loadSheetContent .. "\n" .. formatRowLoadSheet("@WARN!@ F.BLK EXP.", data.warning, 22)
         end
@@ -1305,6 +1310,9 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Display Loadsheet in UTC", toLoadHub.settings.hoppie.utc_time)
     if changed then toLoadHub.settings.hoppie.utc_time , setSave = newval, true end
 
+    changed, newval = imgui.Checkbox("Display Pax In Loadsheet", toLoadHub.settings.hoppie.display_pax)
+    if changed then toLoadHub.settings.hoppie.display_pax , setSave = newval, true end
+
     imgui.TextUnformatted("Secret:")
     local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
     changed, newval = imgui.InputText("##secret", masked_secret, 80)
@@ -1670,6 +1678,10 @@ function toloadHubMainLoop()
             data_f.zfwcg = "--.-"
         else
             data_f.zfwcg = string.format("%.1f",toLoadHub_zfwCG)
+        end
+        data_f.pax = ""
+        if toLoadHub.settings.hoppie.display_pax then
+            data_f.pax = string.format(toLoadHub.pax_count)
         end
         data_f.gwcg = string.format("%.1f",toLoadHub_currentCG)
         data_f.f_blk = string.format("%.1f",writeInUnitKg(toLoadHub_WriteFOB_XP)/1000)
