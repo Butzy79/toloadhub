@@ -675,7 +675,7 @@ end
 
 local function startProcedure(is_boarding, door_setting, message)
     openDoors(is_boarding)
-    toLoadHub.wait_until_speak = os.time() + 1
+    toLoadHub.wait_until_speak = os.time()
     toLoadHub.next_boarding_check = os.time()
     toLoadHub.next_cargo_check = os.time()
     toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
