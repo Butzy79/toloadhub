@@ -55,6 +55,7 @@ local toLoadHub = {
     phases = {
         is_ready_to_start = false,
         is_gh_started = false,
+        is_pax_onboard_enabled = false,
         is_onboarding = false,
         is_pax_onboarded = false,
         is_pax_deboarded = false,
@@ -139,6 +140,7 @@ local toLoadHub = {
             auto_init = true,
             simulate_cargo = true,
             concourrent_cargo = false,
+            pax_delayed = false,
             boarding_speed = 0,
             is_jetbridge = false,
             simulate_jdgh = false,
@@ -692,8 +694,12 @@ local function focusOnToLoadHub()
     end
 end
 
+local function isPaxCanStart()
+    return not toLoadHub.settings.general.pax_delayed or toLoadHub.phases.is_pax_onboard_enabled
+end
+
 local function isNoPaxInRangeForCargo()
-    if toLoadHub.settings.general.concourrent_cargo then
+    if toLoadHub.settings.general.concourrent_cargo or toLoadHub.settings.general.pax_delayed then
         return true
     else
         return toLoadHub_NoPax >= toLoadHub.pax_count * (math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2]) / 100)
@@ -909,8 +915,8 @@ function viewToLoadHubWindow()
             if isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0 then
                 imgui.Separator()
                 imgui.Spacing()
-
-                if imgui.Button("Start Boarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
+                local isLblCargo = toLoadHub.settings.general.pax_delayed and " Cargo" or ""
+                if imgui.Button("Start Boarding" .. isLblCargo .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
                     toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
                     startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
                 end
@@ -937,9 +943,16 @@ function viewToLoadHubWindow()
         end
     end
 
+    -- Boarding started but Passenger are not boarding by setting
+    if toLoadHub.phases.is_onboarding and toLoadHub.settings.general.pax_delayed and not toLoadHub.phases.is_pax_onboard_enabled then
+        if imgui.Button("Start Boarding Passenger") then
+            toLoadHub.phases.is_pax_onboard_enabled = true
+        end
+    end
+
     -- Onboarding Phase
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
-        if toLoadHub.pax_count > 0 and not toLoadHub.phases.is_pax_onboarded then
+        if toLoadHub.pax_count > 0 and not toLoadHub.phases.is_pax_onboarded and (not toLoadHub.settings.general.pax_delayed or toLoadHub.phases.is_pax_onboard_enabled) then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted(string.format("Boarding in progress %s / %s boarded", math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
             imgui.PopStyleColor()
@@ -947,7 +960,7 @@ function viewToLoadHubWindow()
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
             imgui.TextUnformatted(string.format("Passenger boarded %s", toLoadHub_NoPax))
             imgui.PopStyleColor()
-        else
+        elseif not toLoadHub.settings.general.pax_delayed or toLoadHub.phases.is_pax_onboard_enabled then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
             imgui.TextUnformatted(string.format("No passenger to board"))
             imgui.PopStyleColor()
@@ -1251,8 +1264,13 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
     if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
 
-    changed, newval = imgui.Checkbox("Load cargo with pax boarding", toLoadHub.settings.general.concourrent_cargo)
-    if changed then toLoadHub.settings.general.concourrent_cargo , setSave = newval, true end
+    if not toLoadHub.settings.general.pax_delayed then
+        changed, newval = imgui.Checkbox("Load cargo with pax boarding", toLoadHub.settings.general.concourrent_cargo)
+        if changed then toLoadHub.settings.general.concourrent_cargo , setSave = newval, true end
+    end
+
+    changed, newval = imgui.Checkbox("Starting with loading cargo", toLoadHub.settings.general.pax_delayed)
+    if changed then toLoadHub.settings.general.pax_delayed , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Use Imperial Units", toLoadHub.settings.general.is_lbs)
     if changed then toLoadHub.settings.general.is_lbs , setSave = newval, true end
@@ -1483,7 +1501,7 @@ function toloadHubMainLoop()
     end
 
     -- Onboarding Phase and Finishing Onboarding
-    if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
+    if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded and isPaxCanStart() then
         if toLoadHub_NoPax < toLoadHub.pax_count and now > toLoadHub.next_boarding_check then
             if toLoadHub.settings.general.boarding_speed == 0 then
                 toLoadHub_NoPax = toLoadHub.pax_count
