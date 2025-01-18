@@ -323,14 +323,6 @@ local function readSettingsToFile()
     end
 end
 
-local function startProcedure(is_boarding, door_setting, message)
-    openDoors(is_boarding)
-    toLoadHub.next_boarding_check = os.time()
-    toLoadHub.next_cargo_check = os.time()
-    toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
-    toLoadHub.what_to_speak = message
-end
-
 local function divideCargoFwdAft()
     local randomPercentage = math.random(toLoadHub.cargo_fwd_distribution_range[1], toLoadHub.cargo_fwd_distribution_range[2]) / 100
     -- Calculate forward and aft cargo
@@ -681,19 +673,12 @@ local function closeDoorsCatering()
     toLoadHub_CateringDoors_2 = 0
 end
 
-function startBoardingDeboardingOrWindow()
-    local is_open = false
-    if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and (isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0) then
-        toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
-        startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
-        is_open = true
-    elseif toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and (isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0) then
-        startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
-        is_open = true
-    else
-        toLoadHub.what_to_speak = "Procedure not available"
-    end
-    toLoadHub.wait_until_speak = os.time() + 2
+local function startProcedure(is_boarding, door_setting, message)
+    openDoors(is_boarding)
+    toLoadHub.next_boarding_check = os.time()
+    toLoadHub.next_cargo_check = os.time()
+    toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
+    toLoadHub.what_to_speak = message
 end
 
 local function focusOnToLoadHub()
@@ -1438,6 +1423,21 @@ function resetPositionToloadHubWindow()
         loadToloadHubWindow()
     end
     
+end
+
+function startBoardingDeboardingOrWindow()
+    local is_open = false
+    if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and (isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0) then
+        toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
+        startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
+        is_open = true
+    elseif toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and (isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0) then
+        startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
+        is_open = true
+    else
+        toLoadHub.what_to_speak = "Procedure not available"
+    end
+    toLoadHub.wait_until_speak = os.time() + 2
 end
 
 -- == Main Loop Often (1 Sec) ==
