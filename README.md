@@ -23,6 +23,8 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Automatically Initialize Airplane**: Automatically sets the aircraft values to zero on simulator startup.  
 - **Simulate Cargo**: If enabled, cargo loading/unloading is simulated; otherwise, it is loaded instantly.
 - **Load cargo with pax boarding**: If selected, cargo loading will start simultaneously with passenger boarding.
+Not visibile if Starting with loading cargo is checked.
+- **Starting with loading cargo**: When selected, cargo loading will begin, and passengers will require a manual action via a button to start boarding. The button will be visible during the loading process.
 - **Use Imperial Units**: Set Imperial units. SimBrief has priority over this value. If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.
 - **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
 - **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.
