@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Cargo time trimmed
 - Fuel saved/burned improved
 - Shortcut command to start board and deboard
-
+- Setting to start loading cargo. Passengers require an action to start boarding.
 ## [0.14.0]- 2025-01-13
 ### Added
 - Arrival times loadsheet with fuel status
