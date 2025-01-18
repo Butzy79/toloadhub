@@ -1822,7 +1822,7 @@ add_macro("ToLoad Hub - Reset Window Position", "resetPositionToloadHubWindow()"
 
 create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Toggle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
 create_command("FlyWithLua/TOLOADHUB/ResetPosition_toloadhub", "Reset Position ToLoadHUB window", "resetPositionToloadHubWindow()", "", "")
-create_command("FlyWithLua/TOLOADHUB/Start_Boarding", "Start Barding/Deboarding", "startBoardingDeboardingOrWindow()", "", "")
+create_command("FlyWithLua/TOLOADHUB/Start_Boarding", "Start Boarding/Deboarding", "startBoardingDeboardingOrWindow()", "", "")
 
 do_often("toloadHubMainLoop()")
 
