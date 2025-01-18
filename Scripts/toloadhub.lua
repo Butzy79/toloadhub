@@ -1730,7 +1730,7 @@ function toloadHubMainLoop()
             data_p.gwcg = string.format("%.1f", toLoadHub_blockCG)
         end
         if toLoadHub.settings.hoppie.display_pax then
-            data_f.pax = string.format(toLoadHub.simbrief.pax_count)
+            data_p.pax = string.format(toLoadHub.simbrief.pax_count)
         end
         data_p.f_blk = string.format("%.1f",toLoadHub.simbrief.plan_ramp/1000)
         data_p.flt_no = toLoadHub_flight_no
