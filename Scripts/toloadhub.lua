@@ -675,6 +675,7 @@ end
 
 local function startProcedure(is_boarding, door_setting, message)
     openDoors(is_boarding)
+    toLoadHub.wait_until_speak = os.time() + 1
     toLoadHub.next_boarding_check = os.time()
     toLoadHub.next_cargo_check = os.time()
     toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
@@ -1435,9 +1436,9 @@ function startBoardingDeboardingOrWindow()
         startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
         is_open = true
     else
+        toLoadHub.wait_until_speak = os.time()
         toLoadHub.what_to_speak = "Procedure not available"
     end
-    toLoadHub.wait_until_speak = os.time() + 2
 end
 
 -- == Main Loop Often (1 Sec) ==
