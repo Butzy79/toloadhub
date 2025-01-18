@@ -49,7 +49,6 @@ local toLoadHub = {
     kgPerUnit = 25,
     first_init = false,
     is_lbs = false,
-    is_jetbridge = false,
     unitLabel = "KGS",
     unitTLabel = "T",
     flt_no = "",
@@ -141,6 +140,7 @@ local toLoadHub = {
             simulate_cargo = true,
             concourrent_cargo = false,
             boarding_speed = 0,
+            is_jetbridge = false,
             simulate_jdgh = false,
             is_lbs = false
         },
@@ -490,7 +490,6 @@ local function resetAirplaneParameters()
     toLoadHub.chocks_out_set = false
     toLoadHub.chocks_in_set = false
     toLoadHub.what_to_speak = nil
-    toLoadHub.is_jetbridge = false
     toLoadHub.boarding_sound_played = false
     toLoadHub.deboarding_sound_played = false
     toLoadHub.boarding_cargo_sound_played = false
@@ -631,7 +630,7 @@ end
 local function openDoors(boarding)
     local setVal = boarding and toLoadHub.settings.door.open_boarding or toLoadHub.settings.door.open_deboarding
     toLoadHub_Doors_1 = 2
-    if toLoadHub.is_jetbridge and PLANE_ICAO == "A319" or PLANE_ICAO == "A20N" then return end
+    if toLoadHub.settings.general.is_jetbridge and PLANE_ICAO == "A319" or PLANE_ICAO == "A20N" then return end
     if setVal > 1 then
         toLoadHub_Doors_2 = 2
         if PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339" then
@@ -909,13 +908,13 @@ function viewToLoadHubWindow()
                     toLoadHub.phases.is_onboarding = true
                 end
                 if not allDoorsOpen() then
-                    if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
-                        toLoadHub.is_jetbridge = false
+                    if imgui.RadioButton("Airstair", not toLoadHub.settings.general.is_jetbridge) then
+                        toLoadHub.settings.general.is_jetbridge = false
                         toLoadHub.simulate_result = false
                     end
                     imgui.SameLine(100)
-                    if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
-                        toLoadHub.is_jetbridge = true
+                    if imgui.RadioButton("Jetbridge", toLoadHub.settings.general.is_jetbridge) then
+                        toLoadHub.settings.general.is_jetbridge = true
                         toLoadHub.simulate_result = false
                     end
                 end
@@ -1015,12 +1014,12 @@ function viewToLoadHubWindow()
                 toLoadHub.next_cargo_check = os.time()
             end
             if not allDoorsOpen() then
-                if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
-                    toLoadHub.is_jetbridge = false
+                if imgui.RadioButton("Airstair", not toLoadHub.settings.general.is_jetbridge) then
+                    toLoadHub.settings.general.is_jetbridge = false
                 end
                 imgui.SameLine(100)
-                if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
-                    toLoadHub.is_jetbridge = true
+                if imgui.RadioButton("Jetbridge", toLoadHub.settings.general.is_jetbridge) then
+                    toLoadHub.settings.general.is_jetbridge = true
                 end
             end
             imgui.SameLine(300)
@@ -1130,7 +1129,7 @@ function viewToLoadHubWindow()
             imgui.PopStyleColor()
             generalSpeed = 2
             toLoadHub.set_default_seconds = false
-        elseif toLoadHub.is_jetbridge and isAnyDoorOpen() then
+        elseif toLoadHub.settings.general.is_jetbridge and isAnyDoorOpen() then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("Jetbridge attached.")
             imgui.PopStyleColor()
@@ -1421,6 +1420,28 @@ function resetPositionToloadHubWindow()
         loadToloadHubWindow()
     end
     
+end
+
+function startBoardingDeboardingOrWindow()
+    local is_open = false
+    local function startProcedure(is_boarding, door_setting, message)
+        openDoors(is_boarding)
+        toLoadHub.next_boarding_check = os.time()
+        toLoadHub.next_cargo_check = os.time()
+        toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
+        is_open = true
+        toLoadHub.what_to_speak = message
+    end
+
+    if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and (isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0) then
+        toLoadHub_PaxDistrib = math.random(table.unpack(toLoadHub.pax_distribution_range)) / 100
+        startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
+    elseif toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and (isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0) then
+        startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
+    else
+        toLoadHub.what_to_speak = "Procedure not available"
+    end
+    toLoadHub.wait_until_speak = os.time() + 2
 end
 
 -- == Main Loop Often (1 Sec) ==
@@ -1804,6 +1825,7 @@ add_macro("ToLoad Hub - Reset Window Position", "resetPositionToloadHubWindow()"
 
 create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Toggle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
 create_command("FlyWithLua/TOLOADHUB/ResetPosition_toloadhub", "Reset Position ToLoadHUB window", "resetPositionToloadHubWindow()", "", "")
+create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Start Barding/Deboarding", "startBoardingDeboardingOrWindow()", "", "")
 
 do_often("toloadHubMainLoop()")
 

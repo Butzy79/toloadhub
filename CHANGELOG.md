@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Loadsheet pax value
 - Cargo time trimmed
 - Fuel saved/burned improved
+- Shortcut command to start board and deboard
 
 ## [0.14.0]- 2025-01-13
 ### Added
