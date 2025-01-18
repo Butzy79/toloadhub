@@ -294,6 +294,7 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
 end
 
 -- == Utility Functions ==
+
 function saveSettingsToFileToLoadHub(final)
     debug(string.format("[%s] saveSettingsToFileToLoadHub(%s)", toLoadHub.title, tostring(final)))
     LIP.save(SCRIPT_DIRECTORY .. toLoadHub.file, toLoadHub.settings)
@@ -320,6 +321,14 @@ local function readSettingsToFile()
             end
         end
     end
+end
+
+local function startProcedure(is_boarding, door_setting, message)
+    openDoors(is_boarding)
+    toLoadHub.next_boarding_check = os.time()
+    toLoadHub.next_cargo_check = os.time()
+    toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
+    toLoadHub.what_to_speak = message
 end
 
 local function divideCargoFwdAft()
@@ -901,11 +910,8 @@ function viewToLoadHubWindow()
                 imgui.Spacing()
 
                 if imgui.Button("Start Boarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
-                    openDoors(true)
                     toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
-                    toLoadHub.next_boarding_check = os.time()
-                    toLoadHub.next_cargo_check = os.time()
-                    toLoadHub.phases.is_onboarding = true
+                    startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
                 end
                 if not allDoorsOpen() then
                     if imgui.RadioButton("Airstair", not toLoadHub.settings.general.is_jetbridge) then
@@ -1008,10 +1014,7 @@ function viewToLoadHubWindow()
 
         if isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0 then
             if imgui.Button("Start Deboarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
-                openDoors(false)
-                toLoadHub.phases.is_deboarding = true
-                toLoadHub.next_boarding_check = os.time()
-                toLoadHub.next_cargo_check = os.time()
+                startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
             end
             if not allDoorsOpen() then
                 if imgui.RadioButton("Airstair", not toLoadHub.settings.general.is_jetbridge) then
@@ -1424,20 +1427,13 @@ end
 
 function startBoardingDeboardingOrWindow()
     local is_open = false
-    local function startProcedure(is_boarding, door_setting, message)
-        openDoors(is_boarding)
-        toLoadHub.next_boarding_check = os.time()
-        toLoadHub.next_cargo_check = os.time()
-        toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
-        is_open = true
-        toLoadHub.what_to_speak = message
-    end
-
     if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and (isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0) then
-        toLoadHub_PaxDistrib = math.random(table.unpack(toLoadHub.pax_distribution_range)) / 100
+        toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
         startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
+        is_open = true
     elseif toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and (isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0) then
         startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
+        is_open = true
     else
         toLoadHub.what_to_speak = "Procedure not available"
     end
@@ -1825,7 +1821,7 @@ add_macro("ToLoad Hub - Reset Window Position", "resetPositionToloadHubWindow()"
 
 create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Toggle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
 create_command("FlyWithLua/TOLOADHUB/ResetPosition_toloadhub", "Reset Position ToLoadHUB window", "resetPositionToloadHubWindow()", "", "")
-create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Start Barding/Deboarding", "startBoardingDeboardingOrWindow()", "", "")
+create_command("FlyWithLua/TOLOADHUB/Start_Boarding", "Start Barding/Deboarding", "startBoardingDeboardingOrWindow()", "", "")
 
 do_often("toloadHubMainLoop()")
 
