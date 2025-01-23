@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "0.14.0",
+    version = "1.0.0",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -36,6 +36,8 @@ local toLoadHub = {
     max_cargo_fwd = 3000,
     max_cargo_aft = 5000,
     max_fuel = 20000,
+    fuel_engines_on = nil,
+    fuel_engines_off = nil,
     cargo = 0,
     error_message = nil,
     cargo_aft = 0,
@@ -43,17 +45,17 @@ local toLoadHub = {
     pax_distribution_range = {35, 60},
     cargo_fwd_distribution_range = {55, 75},
     cargo_starting_range = {45, 60},
-    cargo_speeds = {0, 10, 13},
+    cargo_speeds = {0, 4, 10},
     kgPerUnit = 25,
     first_init = false,
     is_lbs = false,
-    is_jetbridge = false,
     unitLabel = "KGS",
     unitTLabel = "T",
     flt_no = "",
     phases = {
         is_ready_to_start = false,
         is_gh_started = false,
+        is_pax_onboard_enabled = false,
         is_onboarding = false,
         is_pax_onboarded = false,
         is_pax_deboarded = false,
@@ -138,7 +140,9 @@ local toLoadHub = {
             auto_init = true,
             simulate_cargo = true,
             concourrent_cargo = false,
+            pax_delayed = false,
             boarding_speed = 0,
+            is_jetbridge = false,
             simulate_jdgh = false,
             is_lbs = false
         },
@@ -153,6 +157,7 @@ local toLoadHub = {
             preliminary_loadsheet = true,
             chocks_loadsheet = true,
             utc_time = false,
+            display_pax = false,
         },
         door = {
             close_boarding = true,
@@ -173,7 +178,8 @@ local loadsheetStructure = {
             zfw = "",
             zfwcg = "",
             gwcg = "",
-            f_blk = ""
+            f_blk = "",
+            pax = ""
         }
         setmetatable(obj, self)
         self.__index = self
@@ -290,6 +296,7 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
 end
 
 -- == Utility Functions ==
+
 function saveSettingsToFileToLoadHub(final)
     debug(string.format("[%s] saveSettingsToFileToLoadHub(%s)", toLoadHub.title, tostring(final)))
     LIP.save(SCRIPT_DIRECTORY .. toLoadHub.file, toLoadHub.settings)
@@ -419,6 +426,16 @@ local function isAllEngineOff()
     return all_zero
 end
 
+local function isAnyEngineBurningFuel()
+    local engine = dataref_table("sim/flightmodel2/engines/engine_is_burning_fuel")
+    local all_zero = false
+    if engine[0] == 1 or engine[1] == 1 or engine[2] == 1 or engine[3] == 1 then
+        all_zero = true
+    end
+    return all_zero
+end
+
+
 local function setAirplaneNumbers()
     if PLANE_ICAO == "A319" then
         toLoadHub.max_passenger = 145
@@ -476,7 +493,6 @@ local function resetAirplaneParameters()
     toLoadHub.chocks_out_set = false
     toLoadHub.chocks_in_set = false
     toLoadHub.what_to_speak = nil
-    toLoadHub.is_jetbridge = false
     toLoadHub.boarding_sound_played = false
     toLoadHub.deboarding_sound_played = false
     toLoadHub.boarding_cargo_sound_played = false
@@ -484,6 +500,8 @@ local function resetAirplaneParameters()
     toLoadHub.full_deboard_sound = false
     toLoadHub.is_onground = true
     toLoadHub.error_message = nil
+    toLoadHub.fuel_engines_on = nil
+    toLoadHub.fuel_engines_off = nil
     for key in pairs(toLoadHub.hoppie) do
         if key == "loadsheet_check" then
             toLoadHub.hoppie[key] = os.time()
@@ -615,7 +633,7 @@ end
 local function openDoors(boarding)
     local setVal = boarding and toLoadHub.settings.door.open_boarding or toLoadHub.settings.door.open_deboarding
     toLoadHub_Doors_1 = 2
-    if toLoadHub.is_jetbridge and PLANE_ICAO == "A319" or PLANE_ICAO == "A20N" then return end
+    if toLoadHub.settings.general.is_jetbridge and PLANE_ICAO == "A319" or PLANE_ICAO == "A20N" then return end
     if setVal > 1 then
         toLoadHub_Doors_2 = 2
         if PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" or PLANE_ICAO == "A346" or PLANE_ICAO == "A339" then
@@ -657,6 +675,15 @@ local function closeDoorsCatering()
     toLoadHub_CateringDoors_2 = 0
 end
 
+local function startProcedure(is_boarding, door_setting, message)
+    openDoors(is_boarding)
+    toLoadHub.wait_until_speak = os.time()
+    toLoadHub.next_boarding_check = os.time()
+    toLoadHub.next_cargo_check = os.time()
+    toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
+    toLoadHub.what_to_speak = message
+end
+
 local function focusOnToLoadHub()
     if not toLoadHub.visible_main and not toLoadHub.visible_settings then
         openToLoadHubWindow(true)
@@ -667,8 +694,12 @@ local function focusOnToLoadHub()
     end
 end
 
+local function isPaxCanStart()
+    return not toLoadHub.settings.general.pax_delayed or toLoadHub.phases.is_pax_onboard_enabled
+end
+
 local function isNoPaxInRangeForCargo()
-    if toLoadHub.settings.general.concourrent_cargo then
+    if toLoadHub.settings.general.concourrent_cargo or toLoadHub.settings.general.pax_delayed then
         return true
     else
         return toLoadHub_NoPax >= toLoadHub.pax_count * (math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2]) / 100)
@@ -726,6 +757,9 @@ local function sendLoadsheetToToliss(data)
             formatRowLoadSheet("GWCG", data.gwcg, 9),
             formatRowLoadSheet("F.BLK", data.f_blk, 9),
         }, "\n")
+        if toLoadHub.settings.hoppie.display_pax and data.pax ~= "" then
+            loadSheetContent = loadSheetContent .. "\n" .. formatRowLoadSheet("PAX", data.pax, 9)
+        end
         if data.warning ~= "" then
             loadSheetContent = loadSheetContent .. "\n" .. formatRowLoadSheet("@WARN!@ F.BLK EXP.", data.warning, 22)
         end
@@ -736,7 +770,8 @@ local function sendLoadsheetToToliss(data)
             formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
         }, "\n")
     elseif data.typeL == 3 then
-        local consumption = (toLoadHub.simbrief.plan_ramp - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub_WriteFOB_XP)
+        local consumption = (writeInUnitKg(toLoadHub.fuel_engines_on) - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub.fuel_engines_off)
+
         local lblSaving = "Used as Planned"
         if consumption < 0 then
             lblSaving = "Save @" .. consumption .. "@ " .. toLoadHub.unitLabel
@@ -880,22 +915,19 @@ function viewToLoadHubWindow()
             if isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0 then
                 imgui.Separator()
                 imgui.Spacing()
-
-                if imgui.Button("Start Boarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
-                    openDoors(true)
+                local isLblCargo = toLoadHub.settings.general.pax_delayed and " Cargo" or ""
+                if imgui.Button("Start Boarding" .. isLblCargo .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
                     toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
-                    toLoadHub.next_boarding_check = os.time()
-                    toLoadHub.next_cargo_check = os.time()
-                    toLoadHub.phases.is_onboarding = true
+                    startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
                 end
                 if not allDoorsOpen() then
-                    if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
-                        toLoadHub.is_jetbridge = false
+                    if imgui.RadioButton("Airstair", not toLoadHub.settings.general.is_jetbridge) then
+                        toLoadHub.settings.general.is_jetbridge = false
                         toLoadHub.simulate_result = false
                     end
                     imgui.SameLine(100)
-                    if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
-                        toLoadHub.is_jetbridge = true
+                    if imgui.RadioButton("Jetbridge", toLoadHub.settings.general.is_jetbridge) then
+                        toLoadHub.settings.general.is_jetbridge = true
                         toLoadHub.simulate_result = false
                     end
                 end
@@ -911,9 +943,16 @@ function viewToLoadHubWindow()
         end
     end
 
+    -- Boarding started but Passenger are not boarding by setting
+    if toLoadHub.phases.is_onboarding and toLoadHub.settings.general.pax_delayed and not toLoadHub.phases.is_pax_onboard_enabled then
+        if imgui.Button("Start Boarding Passenger") then
+            toLoadHub.phases.is_pax_onboard_enabled = true
+        end
+    end
+
     -- Onboarding Phase
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
-        if toLoadHub.pax_count > 0 and not toLoadHub.phases.is_pax_onboarded then
+        if toLoadHub.pax_count > 0 and not toLoadHub.phases.is_pax_onboarded and (not toLoadHub.settings.general.pax_delayed or toLoadHub.phases.is_pax_onboard_enabled) then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted(string.format("Boarding in progress %s / %s boarded", math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
             imgui.PopStyleColor()
@@ -921,7 +960,7 @@ function viewToLoadHubWindow()
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
             imgui.TextUnformatted(string.format("Passenger boarded %s", toLoadHub_NoPax))
             imgui.PopStyleColor()
-        else
+        elseif not toLoadHub.settings.general.pax_delayed or toLoadHub.phases.is_pax_onboard_enabled then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
             imgui.TextUnformatted(string.format("No passenger to board"))
             imgui.PopStyleColor()
@@ -989,18 +1028,15 @@ function viewToLoadHubWindow()
 
         if isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0 then
             if imgui.Button("Start Deboarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
-                openDoors(false)
-                toLoadHub.phases.is_deboarding = true
-                toLoadHub.next_boarding_check = os.time()
-                toLoadHub.next_cargo_check = os.time()
+                startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
             end
             if not allDoorsOpen() then
-                if imgui.RadioButton("Airstair", not toLoadHub.is_jetbridge) then
-                    toLoadHub.is_jetbridge = false
+                if imgui.RadioButton("Airstair", not toLoadHub.settings.general.is_jetbridge) then
+                    toLoadHub.settings.general.is_jetbridge = false
                 end
                 imgui.SameLine(100)
-                if imgui.RadioButton("Jetbridge", toLoadHub.is_jetbridge) then
-                    toLoadHub.is_jetbridge = true
+                if imgui.RadioButton("Jetbridge", toLoadHub.settings.general.is_jetbridge) then
+                    toLoadHub.settings.general.is_jetbridge = true
                 end
             end
             imgui.SameLine(300)
@@ -1110,7 +1146,7 @@ function viewToLoadHubWindow()
             imgui.PopStyleColor()
             generalSpeed = 2
             toLoadHub.set_default_seconds = false
-        elseif toLoadHub.is_jetbridge and isAnyDoorOpen() then
+        elseif toLoadHub.settings.general.is_jetbridge and isAnyDoorOpen() then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6AE079)
             imgui.TextUnformatted("Jetbridge attached.")
             imgui.PopStyleColor()
@@ -1228,8 +1264,13 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
     if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
 
-    changed, newval = imgui.Checkbox("Load cargo with pax boarding", toLoadHub.settings.general.concourrent_cargo)
-    if changed then toLoadHub.settings.general.concourrent_cargo , setSave = newval, true end
+    if not toLoadHub.settings.general.pax_delayed then
+        changed, newval = imgui.Checkbox("Load cargo with pax boarding", toLoadHub.settings.general.concourrent_cargo)
+        if changed then toLoadHub.settings.general.concourrent_cargo , setSave = newval, true end
+    end
+
+    changed, newval = imgui.Checkbox("Starting with loading cargo", toLoadHub.settings.general.pax_delayed)
+    if changed then toLoadHub.settings.general.pax_delayed , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Use Imperial Units", toLoadHub.settings.general.is_lbs)
     if changed then toLoadHub.settings.general.is_lbs , setSave = newval, true end
@@ -1289,6 +1330,9 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Display Loadsheet in UTC", toLoadHub.settings.hoppie.utc_time)
     if changed then toLoadHub.settings.hoppie.utc_time , setSave = newval, true end
+
+    changed, newval = imgui.Checkbox("Display Pax In Loadsheet", toLoadHub.settings.hoppie.display_pax)
+    if changed then toLoadHub.settings.hoppie.display_pax , setSave = newval, true end
 
     imgui.TextUnformatted("Secret:")
     local masked_secret = string.rep("*", #toLoadHub.settings.hoppie.secret)
@@ -1400,6 +1444,21 @@ function resetPositionToloadHubWindow()
     
 end
 
+function startBoardingDeboardingOrWindow()
+    local is_open = false
+    if toLoadHub_onground_any > 0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and (isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0) then
+        toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
+        startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
+        is_open = true
+    elseif toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and (isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0) then
+        startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
+        is_open = true
+    else
+        toLoadHub.wait_until_speak = os.time()
+        toLoadHub.what_to_speak = "Procedure not available"
+    end
+end
+
 -- == Main Loop Often (1 Sec) ==
 function toloadHubMainLoop()
     -- All sounds played and airplane debooarded
@@ -1433,8 +1492,16 @@ function toloadHubMainLoop()
         toloadHub_jdexe = 1
     end
 
+    -- Fuel Start and Stop
+    if toLoadHub.fuel_engines_on == nil and toLoadHub.fuel_engines_off == nil and isAnyEngineBurningFuel() then
+        toLoadHub.fuel_engines_on = toLoadHub_WriteFOB_XP
+    end
+    if toLoadHub.phases.is_flying and toLoadHub.phases.is_landed and toLoadHub.fuel_engines_on ~= nil and toLoadHub.fuel_engines_off == nil and not isAnyEngineBurningFuel() then
+        toLoadHub.fuel_engines_off = toLoadHub_WriteFOB_XP
+    end
+
     -- Onboarding Phase and Finishing Onboarding
-    if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
+    if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded and isPaxCanStart() then
         if toLoadHub_NoPax < toLoadHub.pax_count and now > toLoadHub.next_boarding_check then
             if toLoadHub.settings.general.boarding_speed == 0 then
                 toLoadHub_NoPax = toLoadHub.pax_count
@@ -1648,6 +1715,9 @@ function toloadHubMainLoop()
         else
             data_f.zfwcg = string.format("%.1f",toLoadHub_zfwCG)
         end
+        if toLoadHub.settings.hoppie.display_pax then
+            data_f.pax = string.format(toLoadHub.pax_count)
+        end
         data_f.gwcg = string.format("%.1f",toLoadHub_currentCG)
         data_f.f_blk = string.format("%.1f",writeInUnitKg(toLoadHub_WriteFOB_XP)/1000)
         if toLoadHub.simbrief.plan_ramp ~= nil and writeInUnitKg(toLoadHub_WriteFOB_XP) + 80 < toLoadHub.simbrief.plan_ramp then
@@ -1676,6 +1746,9 @@ function toloadHubMainLoop()
             data_p.gwcg = "--.-"
         else
             data_p.gwcg = string.format("%.1f", toLoadHub_blockCG)
+        end
+        if toLoadHub.settings.hoppie.display_pax then
+            data_p.pax = string.format(toLoadHub.simbrief.pax_count)
         end
         data_p.f_blk = string.format("%.1f",toLoadHub.simbrief.plan_ramp/1000)
         data_p.flt_no = toLoadHub_flight_no
@@ -1767,6 +1840,7 @@ add_macro("ToLoad Hub - Reset Window Position", "resetPositionToloadHubWindow()"
 
 create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Toggle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
 create_command("FlyWithLua/TOLOADHUB/ResetPosition_toloadhub", "Reset Position ToLoadHUB window", "resetPositionToloadHubWindow()", "", "")
+create_command("FlyWithLua/TOLOADHUB/Start_Boarding", "Start Boarding/Deboarding", "startBoardingDeboardingOrWindow()", "", "")
 
 do_often("toloadHubMainLoop()")
 

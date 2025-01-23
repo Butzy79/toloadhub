@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.  
 The format is based on [Keep a Changelog](https://keepachangelog.com/),  
 and this project adheres to [Semantic Versioning](https://semver.org/).
+## [1.0.0]- 2025-01-18
+### First stable release
+### Added
+- Loadsheet pax value
+- Cargo time trimmed
+- Fuel saved/burned improved
+- Shortcut command to start board and deboard
+- Setting to start loading cargo. Passengers require an action to start boarding.
 ## [0.14.0]- 2025-01-13
 ### Added
 - Arrival times loadsheet with fuel status

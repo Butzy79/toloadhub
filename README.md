@@ -23,6 +23,8 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Automatically Initialize Airplane**: Automatically sets the aircraft values to zero on simulator startup.  
 - **Simulate Cargo**: If enabled, cargo loading/unloading is simulated; otherwise, it is loaded instantly.
 - **Load cargo with pax boarding**: If selected, cargo loading will start simultaneously with passenger boarding.
+Not visibile if Starting with loading cargo is checked.
+- **Starting with loading cargo**: When selected, cargo loading will begin, and passengers will require a manual action via a button to start boarding. The button will be visible during the loading process.
 - **Use Imperial Units**: Set Imperial units. SimBrief has priority over this value. If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.
 - **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
 - **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.
@@ -39,6 +41,7 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 - **Preliminary Loadsheet Only for Long-haul (+7hrs)**: Sends a preliminary loadsheet if a valid SimBrief plan exists, the flight number matches between SimBrief and the MCDU, and this option is enabled. The preliminary loadsheet can also be sent for all flights if not enabled.  
 - **Loadsheet for chocks on and off**:  Sends a CPDLC message at FL100 with chocks-off and takeoff times, and another after you turn off your beacon and engines, including landing.
 - **Display Loadsheet in UTC**:  If it is checked, loadsheet times are displayed in UTC.
+- **Display Pax In Loadsheet**: If it is checked, loadsheet will display pax value.
 
 ### Door Settings  
 - **Close Doors after Boarding**: Automatically closes doors after boarding is completed.  
@@ -57,6 +60,7 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 In the settings, under **Controllers**, you can find a new command to assign to your key/button to open/close the ToLoad HUB window.  
 The command name is `FlyWithLua -> TOLOADHUB -> Toggle ToLoadHub Window`.
 You can assign a command to reset the window: `FlyWithLua -> TOLOADHUB -> Reset Position ToLoadHUB Window`
+You can assign a command to start onboard or deboard: `FlyWithLua -> TOLOADHUB -> Start Boarding/Deboarding`
 
 ## Contributing  
 Contributions are welcome! Feel free to submit pull requests or report issues to help improve the plugin.  
