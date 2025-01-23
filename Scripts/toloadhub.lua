@@ -1728,7 +1728,7 @@ function toloadHubMainLoop()
 
     if toLoadHub_onground_any > 0 and (not toLoadHub.settings.hoppie.preliminary_loadsheet or toLoadHub.simbrief.est_block ~=nil and toLoadHub.simbrief.est_block/60 > 420) and not toLoadHub.hoppie.loadsheet_preliminary_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.simbrief.callsign ~= nil and toLoadHub.simbrief.callsign == toLoadHub_flight_no then
         if not toLoadHub.hoppie.loadsheet_preliminary_ready then
-            toLoadHub.hoppie.loadsheet_check = os.time() + 4
+            toLoadHub.hoppie.loadsheet_check = os.time() + 3
             toLoadHub.hoppie.loadsheet_preliminary_ready = true
         end
         local data_p = loadsheetStructure:new()
