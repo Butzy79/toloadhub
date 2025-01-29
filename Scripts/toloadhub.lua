@@ -460,7 +460,7 @@ local function setAirplaneNumbers()
         if a321EngineTypeIndex[0] == 0 or a321EngineTypeIndex[0] == 1 then
             toLoadHub.max_passenger = 220
         else
-            toLoadHub.max_passenger = 224
+            toLoadHub.max_passenger = 244
         end
     elseif PLANE_ICAO == "A20N" then
         toLoadHub.max_passenger = 188
