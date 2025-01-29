@@ -450,7 +450,7 @@ local function setAirplaneNumbers()
         if a321EngineTypeIndex[0] == 0 or a321EngineTypeIndex[0] == 1 then
             toLoadHub.max_passenger = 220
         else
-            toLoadHub.max_passenger = 224
+            toLoadHub.max_passenger = 244
         end
      elseif PLANE_ICAO == "A321" then
         local a321EngineTypeIndex = dataref_table("AirbusFBW/EngineTypeIndex")
