@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.0.0",
+    version = "1.0.1",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -442,7 +442,18 @@ local function setAirplaneNumbers()
         toLoadHub.max_cargo_fwd = 2268
         toLoadHub.max_cargo_aft = 4518
         toLoadHub.max_fuel = 18728
-    elseif PLANE_ICAO == "A321" or PLANE_ICAO == "A21N" then
+    elseif PLANE_ICAO == "A21N" then
+        local a321EngineTypeIndex = dataref_table("AirbusFBW/EngineTypeIndex")
+        toLoadHub.max_cargo_fwd = 5670
+        toLoadHub.max_cargo_aft = 7167
+        toLoadHub.max_fuel = 23207
+        if a321EngineTypeIndex[0] == 0 or a321EngineTypeIndex[0] == 1 then
+            toLoadHub.max_passenger = 220
+        else
+            toLoadHub.max_fuel = 28645
+            toLoadHub.max_passenger = 244
+        end
+     elseif PLANE_ICAO == "A321" then
         local a321EngineTypeIndex = dataref_table("AirbusFBW/EngineTypeIndex")
         toLoadHub.max_cargo_fwd = 5670
         toLoadHub.max_cargo_aft = 7167
