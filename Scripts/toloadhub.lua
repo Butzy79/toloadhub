@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.0.1",
+    version = "1.0.2",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -1705,8 +1705,8 @@ function toloadHubMainLoop()
     if applyChange then
         toLoadHub_NoPax_XP = toLoadHub_NoPax
         toLoadHub_PaxDistrib_XP = toLoadHub_PaxDistrib
-        toLoadHub_FwdCargo_XP = toLoadHub_FwdCargo
-        toLoadHub_AftCargo_XP = toLoadHub_AftCargo
+        toLoadHub_FwdCargo_XP = writeInUnitKg(toLoadHub_FwdCargo)
+        toLoadHub_AftCargo_XP = writeInUnitKg(toLoadHub_AftCargo)
         toLoadHub.setWeightCommand = true
         toLoadHub.setWeightTime = os.time() + 2
     end
