@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Jetway auto connection
 
 ### Fix
-- Pounds value fixed for cargo  
+- Pounds value fixed for cargo
+- Release Flight No once Chock Off Sent
 
 ## [1.0.1]- 2025-01-18
 ### Fix

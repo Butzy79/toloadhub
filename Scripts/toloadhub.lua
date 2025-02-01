@@ -1811,7 +1811,12 @@ function toloadHubMainLoop()
 
 
     -- Chocks Off and On
-    if toLoadHub.settings.hoppie.chocks_loadsheet  and toLoadHub.settings.hoppie.enable_loadsheet then
+    if toLoadHub.settings.hoppie.chocks_loadsheet and toLoadHub.settings.hoppie.enable_loadsheet then
+        -- Force FLight Number for landing scope
+        if toLoadHub.flt_no and toLoadHub.flt_no ~= "" and toLoadHub.phases.is_flying and toLoadHub.phases.is_landed and toLoadHub_flight_no ~= toLoadHub.flt_no and not toLoadHub.hoppie.loadsheet_chocks_on_sent then
+            toLoadHub_flight_no = toLoadHub.flt_no
+        end
+
          -- Beacon for Chock Off Loadsheet --
         if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on > 0 and toLoadHub_parking_brake_ratio <=0.1 then
             toLoadHub.chocks_out_set = true
@@ -1858,11 +1863,6 @@ function toloadHubMainLoop()
             data_con.flt_no = toLoadHub.flt_no
             sendLoadsheetToToliss(data_con)
         end
-    end
-
-    -- Force FLight Number
-    if toLoadHub.flt_no and toLoadHub.flt_no ~= "" and toLoadHub.phases.is_flying and toLoadHub.phases.is_landed and toLoadHub_flight_no ~= toLoadHub.flt_no then
-        toLoadHub_flight_no = toLoadHub.flt_no 
     end
 
     -- Focus windows --
