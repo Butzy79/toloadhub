@@ -1409,7 +1409,7 @@ function viewToLoadHubWindowSettings()
     if changed then toLoadHub.settings.general.simulate_fuel , setSave = newval, true end
     
     if toLoadHub.settings.general.simulate_fuel then
-        changed, newval = imgui.Checkbox("When initializing, reset the fuel to an empty tank.", toLoadHub.settings.general.simulate_init_fuel)
+        changed, newval = imgui.Checkbox("When initializing, reset the fuel to an empty tank", toLoadHub.settings.general.simulate_init_fuel)
         if changed then toLoadHub.settings.general.simulate_init_fuel , setSave = newval, true end
     end
 
@@ -1923,7 +1923,7 @@ function toloadHubMainLoop()
         toLoadHub.setWeightTime = os.time() + 2
     end
 
-    if not toLoadHub.hoppie.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.phases.is_onboarded then
+    if not toLoadHub.hoppie.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_refueling and not toLoadHub.phases.is_defueling then
         local data_f = loadsheetStructure:new()
         data_f.typeL = 1
         data_f.labelText = "@Final@"

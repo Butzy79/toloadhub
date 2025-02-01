@@ -20,7 +20,9 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 
 ### General Settings  
 - **Auto Open ToLoad Hub Window**: Automatically opens the ToLoad Hub window upon simulator launch if the aircraft is compatible.  
-- **Automatically Initialize Airplane**: Automatically sets the aircraft values to zero on simulator startup.  
+- **Automatically Initialize Airplane**: Automatically sets the aircraft values to zero on simulator startup.
+- **Simulate Fuel**: If enabled, the plugin manages the fuel.
+- **When initializing, reset the fuel to an empty tank**: If enabled, fuel is set to zero during the reset phase.
 - **Simulate Cargo**: If enabled, cargo loading/unloading is simulated; otherwise, it is loaded instantly.
 - **Load cargo with pax boarding**: If selected, cargo loading will start simultaneously with passenger boarding.
 Not visibile if Starting with loading cargo is checked.
@@ -28,6 +30,7 @@ Not visibile if Starting with loading cargo is checked.
 - **Use Imperial Units**: Set Imperial units. SimBrief has priority over this value. If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.
 - **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
 - **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.
+- **Auto Jetway Management**: If enabled, the jetway is automatically attached and detached from the airplane.
 
 ### SimBrief Settings  
 - **Username**: Your SimBrief username.
