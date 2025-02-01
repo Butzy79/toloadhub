@@ -66,6 +66,7 @@ local toLoadHub = {
     },
     fuel_tank_check = os.time(),
     phases = {
+        is_jetway = false,
         is_refueling = false,
         is_defueling = false,
         is_ready_to_start = false,
@@ -99,6 +100,7 @@ local toLoadHub = {
         all_unloaded = false
     },
     fuel_dots_index = 0,
+    fuel_dots_time = os.clock(),
     boarding_secnds_per_pax = 0,
     set_default_seconds = false,
     simulate_result = false,
@@ -162,6 +164,7 @@ local toLoadHub = {
             boarding_speed = 0,
             is_jetbridge = false,
             simulate_jdgh = false,
+            automate_jetway = false,
             is_lbs = false
         },
         simbrief = {
@@ -233,9 +236,12 @@ math.randomseed(os.time())
 
 -- == Helper Functions ==
 function animate_dots()
-    toLoadHub.fuel_dots_index = (toLoadHub.fuel_dots_index + 1) % 5
+    if os.clock() > toLoadHub.fuel_dots_time then 
+        toLoadHub.fuel_dots_index = (toLoadHub.fuel_dots_index + 1) % 6
+        toLoadHub.fuel_dots_time = os.clock() + 0.2
+    end
     local str = string.rep(".", toLoadHub.fuel_dots_index)
-    return str .. string.rep(" ", 5 - #str)
+    return str .. string.rep(" ", 6 - #str)
 end
 
 local function convertToKgs(value)
@@ -526,6 +532,7 @@ local function resetAirplaneParameters()
     toLoadHub.cargo_fwd = 0
     toLoadHub.boarding_secnds_per_pax = 0
     toLoadHub.fuel_dots_index = 0
+    toLoadHub.fuel_dots_time = os.clock()
     toLoadHub.simulate_result = false
     toLoadHub.simulate_fast_value = 0
     toLoadHub.simulate_real_value = 0
@@ -690,6 +697,22 @@ local function areAllDoorsClosed()
         return toLoadHub_Doors_6 == 0 and toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 == 0
     else
         return toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 == 0
+    end
+end
+
+local function monitorJetWay(force)
+    if not toLoadHub.settings.general.automate_jetway then return end
+    if force and not toLoadHub.phases.is_jetway then
+        toLoadHub.phases.is_jetway = true
+        command_once("sim/ground_ops/jetway")
+        return
+    end
+    if not toLoadHub.phases.is_jetway and toLoadHub_Doors_1 == 2 then
+        command_once("sim/ground_ops/jetway")
+        toLoadHub.phases.is_jetway = true
+    elseif toLoadHub.phases.is_jetway and toLoadHub_Doors_1 == 0 then
+        command_once("sim/ground_ops/jetway")
+        toLoadHub.phases.is_jetway = false
     end
 end
 
@@ -1420,6 +1443,9 @@ function viewToLoadHubWindowSettings()
         if changed then toLoadHub.settings.general.simulate_jdgh , setSave = newval, true end
     end
 
+    changed, newval = imgui.Checkbox("Auto Jetway Management", toLoadHub.settings.general.automate_jetway)
+    if changed then toLoadHub.settings.general.automate_jetway , setSave = newval, true end
+
     changed, newval = imgui.Checkbox("Debug Mode", toLoadHub.settings.general.debug)
     if changed then toLoadHub.settings.general.debug , setSave = newval, true end
     imgui.Separator()
@@ -1573,6 +1599,26 @@ function resetPositionToloadHubWindow()
     
 end
 
+function startRefuelingDeboardingOrWindow()
+    if toLoadHub_onground_any > 0 and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
+        if not toLoadHub.phases.is_refueling and not toLoadHub.phases.is_defueling then
+            if (toLoadHub.fuel_to_load - toLoadHub_m_fuel_total >= toLoadHub.fueling_speed_per_second.refuel) or 
+               (toLoadHub_m_fuel_total - toLoadHub.fuel_to_load >= toLoadHub.fueling_speed_per_second.defuel) then
+                local message = toLoadHub.fuel_to_load > toLoadHub_m_fuel_total and "Refueling" or "Defueling"
+                if toLoadHub.fuel_to_load > toLoadHub_m_fuel_total then
+                    toLoadHub.phases.is_defueling = false
+                    toLoadHub.phases.is_refueling = true
+                else
+                    toLoadHub.phases.is_defueling = true
+                    toLoadHub.phases.is_refueling = false
+                end
+                toLoadHub.wait_until_speak = os.time()
+                toLoadHub.what_to_speak = message .. " Started"
+            end      
+        end    
+    end
+end
+
 function startBoardingDeboardingOrWindow()
     local is_open = false
     if toLoadHub_onground_any > 0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and (isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0) then
@@ -1625,6 +1671,8 @@ function toloadHubMainLoop()
     elseif toLoadHub.phases.is_ready_to_start and not toLoadHub.phases.is_gh_started and now > toLoadHub.next_ready_to_start_check - 20 and toloadHub_jdexe == 0 then
         toloadHub_jdexe = 1
     end
+    -- monitor JetWay
+    monitorJetWay(false)
 
     -- Is Refueling
     if toLoadHub.phases.is_refueling or toLoadHub.phases.is_defueling then
@@ -1723,6 +1771,7 @@ function toloadHubMainLoop()
     -- We Are Landed for focus
     if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and isAllEngineOff() then
         toLoadHub.phases.is_landed = true
+        monitorJetWay(force)
     end
 
     -- Deboarding Phase and Finishing Deboarding
@@ -2034,8 +2083,11 @@ add_macro("ToLoad Hub - Reset Window Position", "resetPositionToloadHubWindow()"
 create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Toggle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
 create_command("FlyWithLua/TOLOADHUB/ResetPosition_toloadhub", "Reset Position ToLoadHUB window", "resetPositionToloadHubWindow()", "", "")
 create_command("FlyWithLua/TOLOADHUB/Start_Boarding", "Start Boarding/Deboarding", "startBoardingDeboardingOrWindow()", "", "")
+create_command("FlyWithLua/TOLOADHUB/Start_Refuel_Defuel", "Start Refueling/Defueling", "startRefuelingDeboardingOrWindow()", "", "")
 
 do_often("toloadHubMainLoop()")
+
+monitorJetWay(true)
 
 if toLoadHub.settings.general.auto_open then
     loadToloadHubWindow()
