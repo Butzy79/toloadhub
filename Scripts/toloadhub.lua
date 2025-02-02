@@ -31,6 +31,7 @@ local toLoadHub = {
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
+    visible_fuel = true,
     pax_count = 0, -- old intendedPassengerNumber
     max_passenger = 224,
     max_cargo_fwd = 3000,
@@ -308,8 +309,16 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
     end
     while pax_on < toLoadHub.pax_count or cargo_on < toLoadHub.cargo do
         if now >= next_pax_time and pax_on < toLoadHub.pax_count then
-            pax_on = pax_on + 1
-            next_pax_time = now + pax_load_time + math.random(-2, 2)
+            if toLoadHub.phases.is_onboarded then
+                -- deboarding
+                pax_on = pax_on + math.random(1, 2)
+                next_pax_time = now + pax_load_time + math.random(-2, 0)
+            else
+                -- boarding
+                pax_on = pax_on + 1
+                next_pax_time = now + pax_load_time + math.random(-1, 1)
+            end
+
         end
         
         if not cargo_start and pax_on >= toLoadHub.pax_count * (cargo_starts_at / 100) then
@@ -534,6 +543,7 @@ local function resetAirplaneParameters()
     toLoadHub.fuel_dots_index = 0
     toLoadHub.fuel_dots_time = os.clock()
     toLoadHub.simulate_result = false
+    toLoadHub.visible_fuel = true
     toLoadHub.simulate_fast_value = 0
     toLoadHub.simulate_real_value = 0
     toLoadHub.set_default_seconds = false
@@ -975,7 +985,7 @@ function viewToLoadHubWindow()
     -- Fuel Section
     if toLoadHub_onground_any > 0 and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
         local temp_window_size = imgui.GetWindowSize()
-        if temp_window_size ~= nil then
+        if temp_window_size ~= nil and toLoadHub.visible_fuel then
             imgui.TextUnformatted(string.format("Fuel in Tank: %.0f " .. toLoadHub.unitLabel, writeInUnitKg(toLoadHub_m_fuel_total)))
             imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
             imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF007F00) -- bar color
@@ -991,7 +1001,7 @@ function viewToLoadHubWindow()
                     toLoadHub.fuel_to_load = math.max(100, math.min(tonumber(newFuelNumber), toLoadHub.max_fuel))
                 end
 
-                if (toLoadHub.fuel_to_load - toLoadHub_m_fuel_total >= toLoadHub.fueling_speed_per_second.refuel) or 
+                if (toLoadHub.fuel_to_load - toLoadHub_m_fuel_total >= toLoadHub.fueling_speed_per_second.refuel) or
                    (toLoadHub_m_fuel_total - toLoadHub.fuel_to_load >= toLoadHub.fueling_speed_per_second.defuel) then
                     if imgui.Button("Start " .. labelFuel) then
                         if toLoadHub.fuel_to_load > toLoadHub_m_fuel_total then
@@ -1002,13 +1012,16 @@ function viewToLoadHubWindow()
                             toLoadHub.phases.is_refueling = false
                         end
                     end
+                    imgui.SameLine(150)
+                end
+                if imgui.Button("Close") then
+                    toLoadHub.visible_fuel = false
                 end
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFEBCE87)
                 imgui.TextUnformatted(labelFuel .. " to " .. toLoadHub.fuel_to_load .. " " .. animate_dots())
                 imgui.PopStyleColor()
             end
-
             if toLoadHub_sim_fasten_seat_belts > 0 then
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
                 imgui.TextUnformatted("Warning: seat belt signs on.")
@@ -1034,7 +1047,6 @@ function viewToLoadHubWindow()
             toLoadHub.simulate_result = false
         end
 
-
         if imgui.Button("Get from Simbrief") then
             fetchSimbriefFPlan()
             toLoadHub.simulate_result = false
@@ -1043,6 +1055,12 @@ function viewToLoadHubWindow()
         if imgui.Button("Set random passenger number") then
             setRandomNumberOfPassengers()
             toLoadHub.simulate_result = false
+        end
+        if not toLoadHub.visible_fuel and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
+            imgui.SameLine(260)
+            if imgui.Button("Fuel Management") then
+                toLoadHub.visible_fuel = true
+            end
         end
 
         if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) then
@@ -1680,6 +1698,7 @@ function toloadHubMainLoop()
             toLoadHub.phases.is_refueling = false
             toLoadHub.wait_until_speak = os.time()
             toLoadHub.what_to_speak = labelFuel .. " halted, beacon lights activated."
+            toLoadHub.visible_fuel = false
         else
             if (toLoadHub_m_fuel_total >= toLoadHub.fuel_to_load and toLoadHub.phases.is_refueling) or
                (toLoadHub_m_fuel_total <= toLoadHub.fuel_to_load and toLoadHub.phases.is_defueling) then
@@ -1687,6 +1706,7 @@ function toloadHubMainLoop()
                 toLoadHub.phases.is_defueling = false
                 toLoadHub.wait_until_speak = os.time()
                 toLoadHub.what_to_speak = labelFuel .. " complete."
+                toLoadHub.visible_fuel = false
             else
                 if toLoadHub.fuel_to_load_next <= now then
                     local tank_num = calculateTankNumber()
@@ -1779,9 +1799,9 @@ function toloadHubMainLoop()
              if toLoadHub.settings.general.boarding_speed == 0 then
                 toLoadHub_NoPax = 0
             else
-                toLoadHub_NoPax = toLoadHub_NoPax - 1
+                toLoadHub_NoPax = toLoadHub_NoPax - math.random(1, 2)
                 applyChange = true
-                toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-2, 2)
+                toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-2, 0)
             end
         end
         if toLoadHub_NoPax <= 0 then
