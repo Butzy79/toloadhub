@@ -1057,7 +1057,6 @@ function viewToLoadHubWindow()
             toLoadHub.simulate_result = false
         end
         if not toLoadHub.visible_fuel and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
-            imgui.SameLine(260)
             if imgui.Button("Fuel Management") then
                 toLoadHub.visible_fuel = true
             end
