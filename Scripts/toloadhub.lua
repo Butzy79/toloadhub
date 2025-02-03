@@ -866,12 +866,12 @@ local function sendLoadsheetToToliss(data)
             formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
         }, "\n")
     elseif data.typeL == 3 then
-        local consumption = string.format("%d",(writeInUnitKg(toLoadHub.fuel_engines_on) - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub.fuel_engines_off))
+        local consumption = (writeInUnitKg(toLoadHub.fuel_engines_on) - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub.fuel_engines_off)
         local lblSaving = "As Planned"
         if consumption < 0 then
-            lblSaving = "Save @" .. consumption .. "@ " .. toLoadHub.unitLabel
+            lblSaving = "Save @" .. string.format("%d",consumption) .. "@ " .. toLoadHub.unitLabel
         elseif consumption > 0 then
-            lblSaving = "Exceed @+" ..  consumption .. "@ " .. toLoadHub.unitLabel
+            lblSaving = "Exceed @+" ..  string.format("%d",consumption) .. "@ " .. toLoadHub.unitLabel
         end
         loadSheetContent = "/data2/333//NE/" .. table.concat({
             "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
