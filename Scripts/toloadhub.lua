@@ -530,7 +530,7 @@ local function setAirplaneNumbers()
     end
 end
 
-local function resetAirplaneParameters()
+local function resetAirplaneParameters(initJetway)
     toLoadHub_NoPax = 0
     toLoadHub_AftCargo = 0
     toLoadHub_FwdCargo = 0
@@ -584,7 +584,11 @@ local function resetAirplaneParameters()
     toLoadHub.fuel_to_load_next = os.time()
     toLoadHub.tank_num = 0
     for key in pairs(toLoadHub.phases) do
-        toLoadHub.phases[key] = false
+        if not initJetway and key == "is_jetway" then
+            -- not reset
+        else
+            toLoadHub.phases[key] = false
+        end
     end
     for key in pairs(toLoadHub.fuel_tank) do
         toLoadHub.fuel_tank[key] = 0
@@ -977,7 +981,7 @@ function viewToLoadHubWindow()
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
         imgui.PopStyleColor()
         if imgui.Button("Init", 100, 30) then
-            resetAirplaneParameters()
+            resetAirplaneParameters(true)
         end
         return
     end
@@ -1162,7 +1166,7 @@ function viewToLoadHubWindow()
         end
         imgui.SameLine(150)
         if imgui.Button("Reset") then
-            resetAirplaneParameters()
+            resetAirplaneParameters(false)
         end
     end
 
@@ -1209,7 +1213,7 @@ function viewToLoadHubWindow()
             imgui.SameLine(235)
         end
         if imgui.Button("Reset") then
-            resetAirplaneParameters()
+            resetAirplaneParameters(false)
         end
     end
 
@@ -1268,7 +1272,7 @@ function viewToLoadHubWindow()
         end
         imgui.SameLine(150)
         if imgui.Button("Reset") then
-            resetAirplaneParameters()
+            resetAirplaneParameters(false)
         end
     end
 
@@ -1282,7 +1286,7 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
 
         if imgui.Button("Flight completed! Reset") then
-            resetAirplaneParameters()
+            resetAirplaneParameters(false)
         end
     end
 
@@ -2089,7 +2093,7 @@ setAirplaneNumbers()
 readSettingsToFile()
 
 if toLoadHub.settings.general.auto_init then
-    resetAirplaneParameters()
+    resetAirplaneParameters(true)
 end
 
 if toLoadHub.settings.simbrief.auto_fetch then
