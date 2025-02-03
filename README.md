@@ -6,9 +6,11 @@ This plugin streamlines the loading process, ensuring a realistic and balanced s
 ## Features  
 - **Passenger Management**: Configure and load passengers with ease.
 - **Real-Time Loading**: Watch passengers being loaded into the aircraft in real-time for added immersion.
+- **Fuel Management**: Simulate refueling and defueling according to your flight plan.
 - **Cargo Management**: Simulate forward and aft cargo loading for a realistic experience.
 - **Dynamic Loadsheet Generation**: Automatically calculates and generates a loadsheet for pre-flight checks.
 - **Hoppie Integration**: Send the generated loadsheet directly to the avionics via Hoppie for enhanced workflow.
+- **Jetway automation**: Let ToloadHUB automatically manage jetways if available at the airport.
 - **Seamless ToLISS Integration**: Built specifically for ToLISS aircraft, ensuring perfect compatibility.  
 
 ## Why Use ToLoadHUB?  
@@ -64,6 +66,7 @@ In the settings, under **Controllers**, you can find a new command to assign to 
 The command name is `FlyWithLua -> TOLOADHUB -> Toggle ToLoadHub Window`.
 You can assign a command to reset the window: `FlyWithLua -> TOLOADHUB -> Reset Position ToLoadHUB Window`
 You can assign a command to start onboard or deboard: `FlyWithLua -> TOLOADHUB -> Start Boarding/Deboarding`
+You can assign a command to start refuel or defuel: `FlyWithLua -> TOLOADHUB -> Start Refueling/Defueling`
 
 ## Contributing  
 Contributions are welcome! Feel free to submit pull requests or report issues to help improve the plugin.  
