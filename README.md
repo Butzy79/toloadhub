@@ -6,9 +6,11 @@ This plugin streamlines the loading process, ensuring a realistic and balanced s
 ## Features  
 - **Passenger Management**: Configure and load passengers with ease.
 - **Real-Time Loading**: Watch passengers being loaded into the aircraft in real-time for added immersion.
+- **Fuel Management**: Simulate refueling and defueling according to your flight plan.
 - **Cargo Management**: Simulate forward and aft cargo loading for a realistic experience.
 - **Dynamic Loadsheet Generation**: Automatically calculates and generates a loadsheet for pre-flight checks.
 - **Hoppie Integration**: Send the generated loadsheet directly to the avionics via Hoppie for enhanced workflow.
+- **Jetway automation**: Let ToloadHUB automatically manage jetways if available at the airport.
 - **Seamless ToLISS Integration**: Built specifically for ToLISS aircraft, ensuring perfect compatibility.  
 
 ## Why Use ToLoadHUB?  
@@ -20,7 +22,9 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 
 ### General Settings  
 - **Auto Open ToLoad Hub Window**: Automatically opens the ToLoad Hub window upon simulator launch if the aircraft is compatible.  
-- **Automatically Initialize Airplane**: Automatically sets the aircraft values to zero on simulator startup.  
+- **Automatically Initialize Airplane**: Automatically sets the aircraft values to zero on simulator startup.
+- **Simulate Fuel**: If enabled, the plugin manages the fuel.
+- **When initializing, reset the fuel to an empty tank**: If enabled, fuel is set to zero during the reset phase.
 - **Simulate Cargo**: If enabled, cargo loading/unloading is simulated; otherwise, it is loaded instantly.
 - **Load cargo with pax boarding**: If selected, cargo loading will start simultaneously with passenger boarding.
 Not visibile if Starting with loading cargo is checked.
@@ -28,6 +32,7 @@ Not visibile if Starting with loading cargo is checked.
 - **Use Imperial Units**: Set Imperial units. SimBrief has priority over this value. If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.
 - **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
 - **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.
+- **Auto Jetway Management**: If enabled, the jetway is automatically attached and detached from the airplane.
 
 ### SimBrief Settings  
 - **Username**: Your SimBrief username.
@@ -61,6 +66,7 @@ In the settings, under **Controllers**, you can find a new command to assign to 
 The command name is `FlyWithLua -> TOLOADHUB -> Toggle ToLoadHub Window`.
 You can assign a command to reset the window: `FlyWithLua -> TOLOADHUB -> Reset Position ToLoadHUB Window`
 You can assign a command to start onboard or deboard: `FlyWithLua -> TOLOADHUB -> Start Boarding/Deboarding`
+You can assign a command to start refuel or defuel: `FlyWithLua -> TOLOADHUB -> Start Refueling/Defueling`
 
 ## Contributing  
 Contributions are welcome! Feel free to submit pull requests or report issues to help improve the plugin.  

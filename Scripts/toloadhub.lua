@@ -27,21 +27,29 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.0.1",
+    version = "1.1.0",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
+    visible_fuel = true,
     pax_count = 0, -- old intendedPassengerNumber
     max_passenger = 224,
     max_cargo_fwd = 3000,
     max_cargo_aft = 5000,
     max_fuel = 20000,
+    fuel_to_load = 0,
+    fuel_to_load_next = os.time(),
     fuel_engines_on = nil,
     fuel_engines_off = nil,
     cargo = 0,
     error_message = nil,
     cargo_aft = 0,
     cargo_fwd = 0,
+    fueling_speed_per_second = {
+        refuel = 20, 
+        defuel = 30
+    },
+    tank_num = 0,
     pax_distribution_range = {35, 60},
     cargo_fwd_distribution_range = {55, 75},
     cargo_starting_range = {45, 60},
@@ -52,7 +60,16 @@ local toLoadHub = {
     unitLabel = "KGS",
     unitTLabel = "T",
     flt_no = "",
+    fuel_tank = {
+        fuel1 = 0, 
+        fuel2 = 0,
+        fuel3 = 0,
+    },
+    fuel_tank_check = os.time(),
     phases = {
+        is_jetway = false,
+        is_refueling = false,
+        is_defueling = false,
         is_ready_to_start = false,
         is_gh_started = false,
         is_pax_onboard_enabled = false,
@@ -83,6 +100,8 @@ local toLoadHub = {
         all_unload = false,
         all_unloaded = false
     },
+    fuel_dots_index = 0,
+    fuel_dots_time = os.clock(),
     boarding_secnds_per_pax = 0,
     set_default_seconds = false,
     simulate_result = false,
@@ -139,11 +158,14 @@ local toLoadHub = {
             auto_open = true,
             auto_init = true,
             simulate_cargo = true,
+            simulate_fuel = true,
+            simulate_init_fuel = false,
             concourrent_cargo = false,
             pax_delayed = false,
             boarding_speed = 0,
             is_jetbridge = false,
             simulate_jdgh = false,
+            automate_jetway = false,
             is_lbs = false
         },
         simbrief = {
@@ -214,6 +236,15 @@ require("LuaXml")
 math.randomseed(os.time())
 
 -- == Helper Functions ==
+function animate_dots()
+    if os.clock() > toLoadHub.fuel_dots_time then 
+        toLoadHub.fuel_dots_index = (toLoadHub.fuel_dots_index + 1) % 6
+        toLoadHub.fuel_dots_time = os.clock() + 0.2
+    end
+    local str = string.rep(".", toLoadHub.fuel_dots_index)
+    return str .. string.rep(" ", 6 - #str)
+end
+
 local function convertToKgs(value)
     return value / 2.205
 end
@@ -278,8 +309,16 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
     end
     while pax_on < toLoadHub.pax_count or cargo_on < toLoadHub.cargo do
         if now >= next_pax_time and pax_on < toLoadHub.pax_count then
-            pax_on = pax_on + 1
-            next_pax_time = now + pax_load_time + math.random(-2, 2)
+            if toLoadHub.phases.is_onboarded then
+                -- deboarding
+                pax_on = pax_on + math.random(1, 2)
+                next_pax_time = now + pax_load_time + math.random(-2, 0)
+            else
+                -- boarding
+                pax_on = pax_on + 1
+                next_pax_time = now + pax_load_time + math.random(-1, 1)
+            end
+
         end
         
         if not cargo_start and pax_on >= toLoadHub.pax_count * (cargo_starts_at / 100) then
@@ -330,6 +369,21 @@ local function divideCargoFwdAft()
     -- Calculate forward and aft cargo
     toLoadHub.cargo_fwd = toLoadHub.cargo * randomPercentage
     toLoadHub.cargo_aft = toLoadHub.cargo - toLoadHub.cargo_fwd
+end
+
+local function calculateTankNumber()
+    toLoadHub.tank_num = (toLoadHub_fuel_1 > 0 and 1 or 0) + (toLoadHub_fuel_2 > 0 and 1 or 0) + (toLoadHub_fuel_3 > 0 and 1 or 0)
+    if toLoadHub.fuel_tank.fuel1 == toLoadHub_fuel_1 and toLoadHub_fuel_1 > 0 then toLoadHub.tank_num = toLoadHub.tank_num - 1 end
+    if toLoadHub.fuel_tank.fuel2 == toLoadHub_fuel_2 and toLoadHub_fuel_2 > 0 then toLoadHub.tank_num = toLoadHub.tank_num - 1 end
+    if toLoadHub.fuel_tank.fuel3 == toLoadHub_fuel_3 and toLoadHub_fuel_3 > 0  then toLoadHub.tank_num = toLoadHub.tank_num - 1 end
+    if toLoadHub.fuel_tank_check < os.time() then
+        toLoadHub.fuel_tank_check = os.time() + 2
+        toLoadHub.fuel_tank.fuel1 = toLoadHub_fuel_1
+        toLoadHub.fuel_tank.fuel2 = toLoadHub_fuel_2
+        toLoadHub.fuel_tank.fuel3 = toLoadHub_fuel_3
+    end
+    if toLoadHub.tank_num <= 0 then toLoadHub.tank_num = 1 end
+    return toLoadHub.tank_num
 end
 
 local function setIsLib()
@@ -391,6 +445,7 @@ local function fetchSimbriefFPlan()
     
     local plan_ramp = xml_data:find("plan_ramp")
     toLoadHub.simbrief.plan_ramp = tonumber(plan_ramp[1])
+    toLoadHub.fuel_to_load = toLoadHub.simbrief.plan_ramp
 
     local total_burn = xml_data:find("total_burn")
     toLoadHub.simbrief.total_burn = tonumber(total_burn[1])
@@ -441,12 +496,12 @@ local function setAirplaneNumbers()
         toLoadHub.max_passenger = 145
         toLoadHub.max_cargo_fwd = 2268
         toLoadHub.max_cargo_aft = 4518
-        toLoadHub.max_fuel = 18728
+        toLoadHub.max_fuel = 18678
     elseif PLANE_ICAO == "A21N" then
         local a321EngineTypeIndex = dataref_table("AirbusFBW/EngineTypeIndex")
         toLoadHub.max_cargo_fwd = 5670
         toLoadHub.max_cargo_aft = 7167
-        toLoadHub.max_fuel = 23207
+        toLoadHub.max_fuel = 23157
         if a321EngineTypeIndex[0] == 0 or a321EngineTypeIndex[0] == 1 then
             toLoadHub.max_passenger = 220
         else
@@ -457,7 +512,7 @@ local function setAirplaneNumbers()
         local a321EngineTypeIndex = dataref_table("AirbusFBW/EngineTypeIndex")
         toLoadHub.max_cargo_fwd = 5670
         toLoadHub.max_cargo_aft = 7167
-        toLoadHub.max_fuel = 23207
+        toLoadHub.max_fuel = 23157
         if a321EngineTypeIndex[0] == 0 or a321EngineTypeIndex[0] == 1 then
             toLoadHub.max_passenger = 220
         else
@@ -467,7 +522,7 @@ local function setAirplaneNumbers()
         toLoadHub.max_passenger = 188
         toLoadHub.max_cargo_fwd = 3402
         toLoadHub.max_cargo_aft = 6033
-        toLoadHub.max_fuel = 18623
+        toLoadHub.max_fuel = 18573
     elseif PLANE_ICAO == "A339" then
         toLoadHub.max_passenger = 375
     elseif PLANE_ICAO == "A346" then
@@ -475,7 +530,7 @@ local function setAirplaneNumbers()
     end
 end
 
-local function resetAirplaneParameters()
+local function resetAirplaneParameters(initJetway)
     toLoadHub_NoPax = 0
     toLoadHub_AftCargo = 0
     toLoadHub_FwdCargo = 0
@@ -485,7 +540,10 @@ local function resetAirplaneParameters()
     toLoadHub.cargo_aft = 0
     toLoadHub.cargo_fwd = 0
     toLoadHub.boarding_secnds_per_pax = 0
+    toLoadHub.fuel_dots_index = 0
+    toLoadHub.fuel_dots_time = os.clock()
     toLoadHub.simulate_result = false
+    toLoadHub.visible_fuel = true
     toLoadHub.simulate_fast_value = 0
     toLoadHub.simulate_real_value = 0
     toLoadHub.set_default_seconds = false
@@ -522,9 +580,20 @@ local function resetAirplaneParameters()
     end
     toLoadHub.setWeightCommand = false
     toLoadHub.flt_no = ""
+    toLoadHub.fuel_to_load = toLoadHub_m_fuel_total
+    toLoadHub.fuel_to_load_next = os.time()
+    toLoadHub.tank_num = 0
     for key in pairs(toLoadHub.phases) do
-        toLoadHub.phases[key] = false
+        if not initJetway and key == "is_jetway" then
+            -- not reset
+        else
+            toLoadHub.phases[key] = false
+        end
     end
+    for key in pairs(toLoadHub.fuel_tank) do
+        toLoadHub.fuel_tank[key] = 0
+    end
+    toLoadHub.fuel_tank_check = os.time()
     for key in pairs(toLoadHub.focus_windows) do
         toLoadHub.focus_windows[key] = false
     end
@@ -544,7 +613,11 @@ local function resetAirplaneParameters()
     toLoadHub_PaxDistrib_XP = 0.5
     setIsLib()
     command_once("AirbusFBW/SetWeightAndCG")
-
+    if toLoadHub.settings.general.simulate_fuel and toLoadHub.settings.general.simulate_init_fuel then
+        toLoadHub_fuel_1 = 0
+        toLoadHub_fuel_2 = 0
+        toLoadHub_fuel_3 = 0
+    end
     debug(string.format("[%s] Reset parameters done", toLoadHub.title))
 end
 
@@ -638,6 +711,22 @@ local function areAllDoorsClosed()
         return toLoadHub_Doors_6 == 0 and toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 == 0
     else
         return toLoadHub_Doors_1 == 0 and toLoadHub_Doors_2 == 0
+    end
+end
+
+local function monitorJetWay(force)
+    if not toLoadHub.settings.general.automate_jetway then return end
+    if force and not toLoadHub.phases.is_jetway then
+        toLoadHub.phases.is_jetway = true
+        command_once("sim/ground_ops/jetway")
+        return
+    end
+    if not toLoadHub.phases.is_jetway and toLoadHub_Doors_1 == 2 then
+        command_once("sim/ground_ops/jetway")
+        toLoadHub.phases.is_jetway = true
+    elseif toLoadHub.phases.is_jetway and toLoadHub_Doors_1 == 0 then
+        command_once("sim/ground_ops/jetway")
+        toLoadHub.phases.is_jetway = false
     end
 end
 
@@ -782,12 +871,11 @@ local function sendLoadsheetToToliss(data)
         }, "\n")
     elseif data.typeL == 3 then
         local consumption = (writeInUnitKg(toLoadHub.fuel_engines_on) - (toLoadHub.simbrief.total_burn + toLoadHub.simbrief.taxi)) - writeInUnitKg(toLoadHub.fuel_engines_off)
-
-        local lblSaving = "Used as Planned"
+        local lblSaving = "As Planned"
         if consumption < 0 then
-            lblSaving = "Save @" .. consumption .. "@ " .. toLoadHub.unitLabel
+            lblSaving = "Save @" .. string.format("%d",consumption) .. "@ " .. toLoadHub.unitLabel
         elseif consumption > 0 then
-            lblSaving = "Exceed @+" ..  consumption .. "@ " .. toLoadHub.unitLabel
+            lblSaving = "Exceed @+" ..  string.format("%d",consumption) .. "@ " .. toLoadHub.unitLabel
         end
         loadSheetContent = "/data2/333//NE/" .. table.concat({
             "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
@@ -893,10 +981,62 @@ function viewToLoadHubWindow()
         imgui.TextUnformatted("ToLoadHUB not auto initiated, please initiate.")
         imgui.PopStyleColor()
         if imgui.Button("Init", 100, 30) then
-            resetAirplaneParameters()
+            resetAirplaneParameters(true)
         end
         return
     end
+
+    -- Fuel Section
+    if toLoadHub_onground_any > 0 and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
+        local temp_window_size = imgui.GetWindowSize()
+        if temp_window_size ~= nil and toLoadHub.visible_fuel then
+            imgui.TextUnformatted(string.format("Fuel in Tank: %.0f " .. toLoadHub.unitLabel, writeInUnitKg(toLoadHub_m_fuel_total)))
+            imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
+            imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF007F00) -- bar color
+            imgui.ProgressBar((toLoadHub_m_fuel_total / toLoadHub.max_fuel), temp_window_size -15, 20)
+            imgui.PopStyleColor()
+            imgui.PopStyleColor()
+            local labelFuel = toLoadHub.fuel_to_load > toLoadHub_m_fuel_total and "Refueling" or "Defueling"
+            if not toLoadHub.phases.is_refueling and not toLoadHub.phases.is_defueling then
+                imgui.TextUnformatted("Requested fuel: ")
+                imgui.SameLine(120)
+                local fuelNumberChanged, newFuelNumber = imgui.InputInt("##fuel", math.floor(toLoadHub.fuel_to_load), 100)
+                if fuelNumberChanged then
+                    toLoadHub.fuel_to_load = math.max(100, math.min(tonumber(newFuelNumber), toLoadHub.max_fuel))
+                end
+
+                if (toLoadHub.fuel_to_load - toLoadHub_m_fuel_total >= toLoadHub.fueling_speed_per_second.refuel) or
+                   (toLoadHub_m_fuel_total - toLoadHub.fuel_to_load >= toLoadHub.fueling_speed_per_second.defuel) then
+                    if imgui.Button("Start " .. labelFuel) then
+                        if toLoadHub.fuel_to_load > toLoadHub_m_fuel_total then
+                            toLoadHub.phases.is_defueling = false
+                            toLoadHub.phases.is_refueling = true
+                        else
+                            toLoadHub.phases.is_defueling = true
+                            toLoadHub.phases.is_refueling = false
+                        end
+                    end
+                    imgui.SameLine(150)
+                end
+                if imgui.Button("Close") then
+                    toLoadHub.visible_fuel = false
+                end
+            else
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFEBCE87)
+                imgui.TextUnformatted(labelFuel .. " to " .. toLoadHub.fuel_to_load .. " " .. animate_dots())
+                imgui.PopStyleColor()
+            end
+            if toLoadHub_sim_fasten_seat_belts > 0 then
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
+                imgui.TextUnformatted("Warning: seat belt signs on.")
+                imgui.PopStyleColor()
+            end
+
+            imgui.Separator()
+            imgui.Spacing()
+        end
+    end
+
 
     -- Starting Onboarding and Passenger/Cargo Selection
     if toLoadHub_onground_any > 0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
@@ -911,7 +1051,6 @@ function viewToLoadHubWindow()
             toLoadHub.simulate_result = false
         end
 
-
         if imgui.Button("Get from Simbrief") then
             fetchSimbriefFPlan()
             toLoadHub.simulate_result = false
@@ -920,6 +1059,11 @@ function viewToLoadHubWindow()
         if imgui.Button("Set random passenger number") then
             setRandomNumberOfPassengers()
             toLoadHub.simulate_result = false
+        end
+        if not toLoadHub.visible_fuel and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
+            if imgui.Button("Fuel Management") then
+                toLoadHub.visible_fuel = true
+            end
         end
 
         if (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) then
@@ -1022,7 +1166,7 @@ function viewToLoadHubWindow()
         end
         imgui.SameLine(150)
         if imgui.Button("Reset") then
-            resetAirplaneParameters()
+            resetAirplaneParameters(false)
         end
     end
 
@@ -1038,19 +1182,28 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
 
         if isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0 then
-            if imgui.Button("Start Deboarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
-                startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
-            end
-            if not allDoorsOpen() then
-                if imgui.RadioButton("Airstair", not toLoadHub.settings.general.is_jetbridge) then
-                    toLoadHub.settings.general.is_jetbridge = false
+            if toLoadHub_sim_fasten_seat_belts > 0 then
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
+                imgui.TextUnformatted("Deboarding unavailable with seat belt signs on.")
+                imgui.PopStyleColor()
+                imgui.Spacing()
+                imgui.Spacing()
+                imgui.SameLine(235)
+            else
+                if imgui.Button("Start Deboarding" .. (not isAnyDoorOpen() and toLoadHub.settings.door.open_boarding > 0 and " (Auto Open Doors)" or "")) then
+                    startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
                 end
-                imgui.SameLine(100)
-                if imgui.RadioButton("Jetbridge", toLoadHub.settings.general.is_jetbridge) then
-                    toLoadHub.settings.general.is_jetbridge = true
+                if not allDoorsOpen() then
+                    if imgui.RadioButton("Airstair", not toLoadHub.settings.general.is_jetbridge) then
+                        toLoadHub.settings.general.is_jetbridge = false
+                    end
+                    imgui.SameLine(100)
+                    if imgui.RadioButton("Jetbridge", toLoadHub.settings.general.is_jetbridge) then
+                        toLoadHub.settings.general.is_jetbridge = true
+                    end
                 end
+                imgui.SameLine(300)
             end
-            imgui.SameLine(300)
         else
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
             imgui.TextUnformatted("Open the doors to start the deboarding.")
@@ -1060,7 +1213,7 @@ function viewToLoadHubWindow()
             imgui.SameLine(235)
         end
         if imgui.Button("Reset") then
-            resetAirplaneParameters()
+            resetAirplaneParameters(false)
         end
     end
 
@@ -1119,7 +1272,7 @@ function viewToLoadHubWindow()
         end
         imgui.SameLine(150)
         if imgui.Button("Reset") then
-            resetAirplaneParameters()
+            resetAirplaneParameters(false)
         end
     end
 
@@ -1133,7 +1286,7 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
 
         if imgui.Button("Flight completed! Reset") then
-            resetAirplaneParameters()
+            resetAirplaneParameters(false)
         end
     end
 
@@ -1272,6 +1425,14 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Automatically initialize airplane", toLoadHub.settings.general.auto_init)
     if changed then toLoadHub.settings.general.auto_init , setSave = newval, true end
 
+    changed, newval = imgui.Checkbox("Simulate Fuel", toLoadHub.settings.general.simulate_fuel)
+    if changed then toLoadHub.settings.general.simulate_fuel , setSave = newval, true end
+    
+    if toLoadHub.settings.general.simulate_fuel then
+        changed, newval = imgui.Checkbox("When initializing, reset the fuel to an empty tank", toLoadHub.settings.general.simulate_init_fuel)
+        if changed then toLoadHub.settings.general.simulate_init_fuel , setSave = newval, true end
+    end
+
     changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
     if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
 
@@ -1301,6 +1462,9 @@ function viewToLoadHubWindowSettings()
         changed, newval = imgui.Checkbox("Auto Start and Stop JD Ground Hanling", toLoadHub.settings.general.simulate_jdgh)
         if changed then toLoadHub.settings.general.simulate_jdgh , setSave = newval, true end
     end
+
+    changed, newval = imgui.Checkbox("Auto Jetway Management", toLoadHub.settings.general.automate_jetway)
+    if changed then toLoadHub.settings.general.automate_jetway , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Debug Mode", toLoadHub.settings.general.debug)
     if changed then toLoadHub.settings.general.debug , setSave = newval, true end
@@ -1455,6 +1619,26 @@ function resetPositionToloadHubWindow()
     
 end
 
+function startRefuelingDeboardingOrWindow()
+    if toLoadHub_onground_any > 0 and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
+        if not toLoadHub.phases.is_refueling and not toLoadHub.phases.is_defueling then
+            if (toLoadHub.fuel_to_load - toLoadHub_m_fuel_total >= toLoadHub.fueling_speed_per_second.refuel) or 
+               (toLoadHub_m_fuel_total - toLoadHub.fuel_to_load >= toLoadHub.fueling_speed_per_second.defuel) then
+                local message = toLoadHub.fuel_to_load > toLoadHub_m_fuel_total and "Refueling" or "Defueling"
+                if toLoadHub.fuel_to_load > toLoadHub_m_fuel_total then
+                    toLoadHub.phases.is_defueling = false
+                    toLoadHub.phases.is_refueling = true
+                else
+                    toLoadHub.phases.is_defueling = true
+                    toLoadHub.phases.is_refueling = false
+                end
+                toLoadHub.wait_until_speak = os.time()
+                toLoadHub.what_to_speak = message .. " Started"
+            end      
+        end    
+    end
+end
+
 function startBoardingDeboardingOrWindow()
     local is_open = false
     if toLoadHub_onground_any > 0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and (isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0) then
@@ -1462,8 +1646,13 @@ function startBoardingDeboardingOrWindow()
         startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
         is_open = true
     elseif toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and (isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0) then
-        startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
-        is_open = true
+        if toLoadHub_sim_fasten_seat_belts > 0 then
+            toLoadHub.wait_until_speak = os.time()
+            toLoadHub.what_to_speak = "Deboarding unavailable with seat belt signs on."
+        else
+            startProcedure(false, toLoadHub.settings.door.open_deboarding, "Deboarding Started")
+            is_open = true
+        end
     else
         toLoadHub.wait_until_speak = os.time()
         toLoadHub.what_to_speak = "Procedure not available"
@@ -1502,13 +1691,57 @@ function toloadHubMainLoop()
     elseif toLoadHub.phases.is_ready_to_start and not toLoadHub.phases.is_gh_started and now > toLoadHub.next_ready_to_start_check - 20 and toloadHub_jdexe == 0 then
         toloadHub_jdexe = 1
     end
+    -- monitor JetWay
+    monitorJetWay(false)
+
+    -- Is Refueling
+    if toLoadHub.phases.is_refueling or toLoadHub.phases.is_defueling then
+        local labelFuel = toLoadHub.phases.is_refueling and "Refueling" or "Defueling"
+        if toLoadHub_beacon_lights_on > 0 then 
+            toLoadHub.phases.is_refueling = false
+            toLoadHub.wait_until_speak = os.time()
+            toLoadHub.what_to_speak = labelFuel .. " halted, beacon lights activated."
+            toLoadHub.visible_fuel = false
+        else
+            if (toLoadHub_m_fuel_total >= toLoadHub.fuel_to_load and toLoadHub.phases.is_refueling) or
+               (toLoadHub_m_fuel_total <= toLoadHub.fuel_to_load and toLoadHub.phases.is_defueling) then
+                toLoadHub.phases.is_refueling = false
+                toLoadHub.phases.is_defueling = false
+                toLoadHub.wait_until_speak = os.time()
+                toLoadHub.what_to_speak = labelFuel .. " complete."
+                toLoadHub.visible_fuel = false
+            else
+                if toLoadHub.fuel_to_load_next <= now then
+                    local tank_num = calculateTankNumber()
+                    if toLoadHub.phases.is_refueling then
+                        local fuel_to_add = (toLoadHub.fueling_speed_per_second.refuel / tank_num)
+                        if toLoadHub.fuel_to_load < toLoadHub_m_fuel_total + toLoadHub.fueling_speed_per_second.refuel then
+                            fuel_to_add = math.max(10, ((toLoadHub.fuel_to_load - toLoadHub_m_fuel_total) / tank_num))
+                        end
+                        toLoadHub_fuel_1 = toLoadHub_fuel_1 + fuel_to_add
+                        toLoadHub_fuel_2 = toLoadHub_fuel_2 + fuel_to_add
+                        toLoadHub_fuel_3 = toLoadHub_fuel_3 + fuel_to_add
+                    else
+                        local fuel_to_remove = (toLoadHub.fueling_speed_per_second.defuel / tank_num)
+                        if toLoadHub.fuel_to_load > toLoadHub_m_fuel_total - toLoadHub.fueling_speed_per_second.defuel then
+                            fuel_to_remove = math.max(10, ((toLoadHub_m_fuel_total-toLoadHub.fuel_to_load) / tank_num))
+                        end
+                        toLoadHub_fuel_1 = toLoadHub_fuel_1 - fuel_to_remove
+                        toLoadHub_fuel_2 = toLoadHub_fuel_2 - fuel_to_remove
+                        toLoadHub_fuel_3 = toLoadHub_fuel_3 - fuel_to_remove
+                    end
+                    toLoadHub.fuel_to_load_next = os.time() + 1
+                end
+            end
+        end
+    end
 
     -- Fuel Start and Stop
     if toLoadHub.fuel_engines_on == nil and toLoadHub.fuel_engines_off == nil and isAnyEngineBurningFuel() then
-        toLoadHub.fuel_engines_on = toLoadHub_WriteFOB_XP
+        toLoadHub.fuel_engines_on = toLoadHub_m_fuel_total
     end
     if toLoadHub.phases.is_flying and toLoadHub.phases.is_landed and toLoadHub.fuel_engines_on ~= nil and toLoadHub.fuel_engines_off == nil and not isAnyEngineBurningFuel() then
-        toLoadHub.fuel_engines_off = toLoadHub_WriteFOB_XP
+        toLoadHub.fuel_engines_off = toLoadHub_m_fuel_total
     end
 
     -- Onboarding Phase and Finishing Onboarding
@@ -1560,6 +1793,7 @@ function toloadHubMainLoop()
     -- We Are Landed for focus
     if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and isAllEngineOff() then
         toLoadHub.phases.is_landed = true
+        monitorJetWay(force)
     end
 
     -- Deboarding Phase and Finishing Deboarding
@@ -1568,9 +1802,9 @@ function toloadHubMainLoop()
              if toLoadHub.settings.general.boarding_speed == 0 then
                 toLoadHub_NoPax = 0
             else
-                toLoadHub_NoPax = toLoadHub_NoPax - 1
+                toLoadHub_NoPax = toLoadHub_NoPax - math.random(1, 2)
                 applyChange = true
-                toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-2, 2)
+                toLoadHub.next_boarding_check = now + toLoadHub.boarding_secnds_per_pax + math.random(-2, 0)
             end
         end
         if toLoadHub_NoPax <= 0 then
@@ -1599,7 +1833,12 @@ function toloadHubMainLoop()
 
 
     -- Chocks Off and On
-    if toLoadHub.settings.hoppie.chocks_loadsheet  and toLoadHub.settings.hoppie.enable_loadsheet then
+    if toLoadHub.settings.hoppie.chocks_loadsheet and toLoadHub.settings.hoppie.enable_loadsheet then
+        -- Force FLight Number for landing scope
+        if toLoadHub.flt_no and toLoadHub.flt_no ~= "" and toLoadHub.phases.is_flying and toLoadHub.phases.is_landed and toLoadHub_flight_no ~= toLoadHub.flt_no and not toLoadHub.hoppie.loadsheet_chocks_on_sent then
+            toLoadHub_flight_no = toLoadHub.flt_no
+        end
+
          -- Beacon for Chock Off Loadsheet --
         if not toLoadHub.chocks_out_set and toLoadHub_beacon_lights_on > 0 and toLoadHub_parking_brake_ratio <=0.1 then
             toLoadHub.chocks_out_set = true
@@ -1646,11 +1885,6 @@ function toloadHubMainLoop()
             data_con.flt_no = toLoadHub.flt_no
             sendLoadsheetToToliss(data_con)
         end
-    end
-
-    -- Force FLight Number
-    if toLoadHub.flt_no and toLoadHub.flt_no ~= "" and toLoadHub.phases.is_flying and toLoadHub.phases.is_landed and toLoadHub_flight_no ~= toLoadHub.flt_no then
-        toLoadHub_flight_no = toLoadHub.flt_no 
     end
 
     -- Focus windows --
@@ -1705,13 +1939,13 @@ function toloadHubMainLoop()
     if applyChange then
         toLoadHub_NoPax_XP = toLoadHub_NoPax
         toLoadHub_PaxDistrib_XP = toLoadHub_PaxDistrib
-        toLoadHub_FwdCargo_XP = toLoadHub_FwdCargo
-        toLoadHub_AftCargo_XP = toLoadHub_AftCargo
+        toLoadHub_FwdCargo_XP = writeInUnitKg(toLoadHub_FwdCargo)
+        toLoadHub_AftCargo_XP = writeInUnitKg(toLoadHub_AftCargo)
         toLoadHub.setWeightCommand = true
         toLoadHub.setWeightTime = os.time() + 2
     end
 
-    if not toLoadHub.hoppie.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.phases.is_onboarded then
+    if not toLoadHub.hoppie.loadsheet_sent and toLoadHub.settings.hoppie.enable_loadsheet and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_refueling and not toLoadHub.phases.is_defueling then
         local data_f = loadsheetStructure:new()
         data_f.typeL = 1
         data_f.labelText = "@Final@"
@@ -1730,8 +1964,8 @@ function toloadHubMainLoop()
             data_f.pax = string.format(toLoadHub.pax_count)
         end
         data_f.gwcg = string.format("%.1f",toLoadHub_currentCG)
-        data_f.f_blk = string.format("%.1f",writeInUnitKg(toLoadHub_WriteFOB_XP)/1000)
-        if toLoadHub.simbrief.plan_ramp ~= nil and writeInUnitKg(toLoadHub_WriteFOB_XP) + 80 < toLoadHub.simbrief.plan_ramp then
+        data_f.f_blk = string.format("%.1f",writeInUnitKg(toLoadHub_m_fuel_total)/1000)
+        if toLoadHub.simbrief.plan_ramp ~= nil and writeInUnitKg(toLoadHub_m_fuel_total) + 80 < toLoadHub.simbrief.plan_ramp then
             data_f.warning = string.format("%.1f",toLoadHub.simbrief.plan_ramp/1000)
         end
         sendLoadsheetToToliss(data_f)
@@ -1823,13 +2057,32 @@ dataref("toLoadHub_m_total", "sim/flightmodel/weight/m_total", "readonly")
 dataref("toLoadHub_m_fuel_total", "sim/flightmodel/weight/m_fuel_total", "readonly")
 
 dataref("toLoadHub_flight_no", "toliss_airbus/init/flight_no", "writeable")
-dataref("toLoadHub_WriteFOB_XP", "AirbusFBW/WriteFOB", "readonly")
 
 dataref("toLoadHub_pressure_altitude", "sim/flightmodel2/position/pressure_altitude", "readonly")
 dataref("toLoadHub_beacon_lights_on", "sim/cockpit/electrical/beacon_lights_on", "readonly")
 dataref("toLoadHub_parking_brake_ratio", "sim/cockpit2/controls/parking_brake_ratio", "readonly")
 dataref("toLoadHub_onground_any", "sim/flightmodel/failures/onground_any", "readonly")
 
+dataref("toLoadHub_sim_fasten_seat_belts", "sim/cockpit/switches/fasten_seat_belts", "readonly")
+
+-- fuel section
+if XPLMFindDataRef("sim/flightmodel/weight/m_fuel1") then
+    dataref("toLoadHub_fuel_1", "sim/flightmodel/weight/m_fuel1", "writable")
+else
+    toLoadHub_fuel_1 = nil
+end
+if XPLMFindDataRef("sim/flightmodel/weight/m_fuel2") then
+    dataref("toLoadHub_fuel_2", "sim/flightmodel/weight/m_fuel2", "writable")
+else
+    toLoadHub_fuel_2 = nil
+end
+if XPLMFindDataRef("sim/flightmodel/weight/m_fuel3") then
+    dataref("toLoadHub_fuel_3", "sim/flightmodel/weight/m_fuel3", "writable")
+else
+    toLoadHub_fuel_3 = nil
+end
+
+-- JD Section
 if XPLMFindDataRef("jd/ghd/execute") then
     dataref("toloadHub_jdexe","jd/ghd/execute", "writeable")
 else
@@ -1840,7 +2093,7 @@ setAirplaneNumbers()
 readSettingsToFile()
 
 if toLoadHub.settings.general.auto_init then
-    resetAirplaneParameters()
+    resetAirplaneParameters(true)
 end
 
 if toLoadHub.settings.simbrief.auto_fetch then
@@ -1852,8 +2105,11 @@ add_macro("ToLoad Hub - Reset Window Position", "resetPositionToloadHubWindow()"
 create_command("FlyWithLua/TOLOADHUB/Toggle_toloadhub", "Toggle ToLoadHUB window", "toggleToloadHubWindow()", "", "")
 create_command("FlyWithLua/TOLOADHUB/ResetPosition_toloadhub", "Reset Position ToLoadHUB window", "resetPositionToloadHubWindow()", "", "")
 create_command("FlyWithLua/TOLOADHUB/Start_Boarding", "Start Boarding/Deboarding", "startBoardingDeboardingOrWindow()", "", "")
+create_command("FlyWithLua/TOLOADHUB/Start_Refuel_Defuel", "Start Refueling/Defueling", "startRefuelingDeboardingOrWindow()", "", "")
 
 do_often("toloadHubMainLoop()")
+
+monitorJetWay(true)
 
 if toLoadHub.settings.general.auto_open then
     loadToloadHubWindow()

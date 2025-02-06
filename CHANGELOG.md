@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.  
 The format is based on [Keep a Changelog](https://keepachangelog.com/),  
 and this project adheres to [Semantic Versioning](https://semver.org/).
+## [1.1.0]- 2025-01-18
+### Added
+- Fuel Management
+- Jetway auto connection
+- Calibrated deboarding speed for passengers.
+
+### Fix
+- Pounds value fixed for cargo
+- Release Flight No once Chock Off Sent
+
 ## [1.0.1]- 2025-01-18
 ### Fix
 - A321 XLR values
