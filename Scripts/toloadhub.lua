@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.1.0",
+    version = "1.1.1",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -621,6 +621,10 @@ local function resetAirplaneParameters(initJetway)
     debug(string.format("[%s] Reset parameters done", toLoadHub.title))
 end
 
+local function seatBeltStatus()
+    return toLoadHub_sim_fasten_seat_belts > 0 or toLoadHub_sim_fasten_seat_belts2 > 0 or toLoadHub_sim_fasten_seat_belts3 > 0 or toLoadHub_sim_fasten_seat_belts4 > 0 or toLoadHub_sim_fasten_seat_belts5 > 0
+end
+
 local function registerSetWeight()
     if not toLoadHub.setWeightCommand or toLoadHub.setWeightTime > os.time() then return end
     command_once("AirbusFBW/SetWeightAndCG")
@@ -1026,7 +1030,7 @@ function viewToLoadHubWindow()
                 imgui.TextUnformatted(labelFuel .. " to " .. toLoadHub.fuel_to_load .. " " .. animate_dots())
                 imgui.PopStyleColor()
             end
-            if toLoadHub_sim_fasten_seat_belts > 0 then
+            if seatBeltStatus() then
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
                 imgui.TextUnformatted("Warning: seat belt signs on.")
                 imgui.PopStyleColor()
@@ -1182,7 +1186,7 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
 
         if isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0 then
-            if toLoadHub_sim_fasten_seat_belts > 0 then
+            if seatBeltStatus() then
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
                 imgui.TextUnformatted("Deboarding unavailable with seat belt signs on.")
                 imgui.PopStyleColor()
@@ -1646,7 +1650,7 @@ function startBoardingDeboardingOrWindow()
         startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
         is_open = true
     elseif toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and (isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0) then
-        if toLoadHub_sim_fasten_seat_belts > 0 then
+        if seatBeltStatus() then
             toLoadHub.wait_until_speak = os.time()
             toLoadHub.what_to_speak = "Deboarding unavailable with seat belt signs on."
         else
@@ -2063,7 +2067,13 @@ dataref("toLoadHub_beacon_lights_on", "sim/cockpit/electrical/beacon_lights_on",
 dataref("toLoadHub_parking_brake_ratio", "sim/cockpit2/controls/parking_brake_ratio", "readonly")
 dataref("toLoadHub_onground_any", "sim/flightmodel/failures/onground_any", "readonly")
 
+-- Seat belts
 dataref("toLoadHub_sim_fasten_seat_belts", "sim/cockpit/switches/fasten_seat_belts", "readonly")
+toLoadHub_sim_fasten_seat_belts = XPLMFindDataRef("sim/cockpit/switches/fasten_seat_belts") and dataref("toLoadHub_sim_fasten_seat_belts", "sim/cockpit/switches/fasten_seat_belts", "readonly") or 0
+toLoadHub_sim_fasten_seat_belts2 = XPLMFindDataRef("sim/cockpit2/switches/fasten_seat_belts") and dataref("toLoadHub_sim_fasten_seat_belts2", "sim/cockpit2/switches/fasten_seat_belts", "readonly") or 0
+toLoadHub_sim_fasten_seat_belts3 = XPLMFindDataRef("AirbusFBW/SeatBeltSignsOn") and dataref("toLoadHub_sim_fasten_seat_belts3", "AirbusFBW/SeatBeltSignsOn", "readonly") or 0
+toLoadHub_sim_fasten_seat_belts4 = XPLMFindDataRef("laminar/A333/switches/fasten_seatbelts") and dataref("toLoadHub_sim_fasten_seat_belts4", "laminar/A333/switches/fasten_seatbelts", "readonly") or 0
+toLoadHub_sim_fasten_seat_belts5 = XPLMFindDataRef("1-sim/12/switch") and dataref("toLoadHub_sim_fasten_seat_belts5", "1-sim/12/switch", "readonly") or 0
 
 -- fuel section
 if XPLMFindDataRef("sim/flightmodel/weight/m_fuel1") then
