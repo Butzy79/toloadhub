@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.  
 The format is based on [Keep a Changelog](https://keepachangelog.com/),  
 and this project adheres to [Semantic Versioning](https://semver.org/).
+## [1.1.3]- 2025-02-09
+### Fix
+- LIP.lua update
+
 ## [1.1.2]- 2025-02-09
 ### Fix
 - Bug with seat belts always on on some Airplanes
