@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.1.1",
+    version = "1.1.2",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -621,8 +621,28 @@ local function resetAirplaneParameters(initJetway)
     debug(string.format("[%s] Reset parameters done", toLoadHub.title))
 end
 
-local function seatBeltStatus()
-    return toLoadHub_sim_fasten_seat_belts > 0 or toLoadHub_sim_fasten_seat_belts2 > 0 or toLoadHub_sim_fasten_seat_belts3 > 0 or toLoadHub_sim_fasten_seat_belts4 > 0 or toLoadHub_sim_fasten_seat_belts5 > 0
+local function seatBeltStatusOn()
+    local seatBeltMappings = {
+        A319 = function() return toLoadHub_sim_fasten_seat_belts3 > 0 end,
+        A20N = function() return toLoadHub_sim_fasten_seat_belts3 > 0 end,
+        A321 = function() return toLoadHub_sim_fasten_seat_belts3 > 0 end,
+        A339 = function() return toLoadHub_sim_fasten_seat_belts3 > 0 end,
+        A346 = function() return toLoadHub_sim_fasten_seat_belts3 > 0 end,
+        A306 = function() return toLoadHub_sim_fasten_seat_belts2 > 0 end,
+        A310 = function() return toLoadHub_sim_fasten_seat_belts2 > 0 end,
+        A359 = function() return toLoadHub_sim_fasten_seat_belts5 > 0 end
+    }
+    if PLANE_ICAO == "A333" then
+        if toLoadHub_sim_fasten_seat_belts4 == 2 or
+           (toLoadHub_sim_fasten_seat_belts4 == 1 and ELEVATION < 3048) then
+            return true
+        end
+        return false
+    end
+    if seatBeltMappings[PLANE_ICAO] then
+        return seatBeltMappings[PLANE_ICAO]()
+    end
+    return toLoadHub_sim_fasten_seat_belts > 0
 end
 
 local function registerSetWeight()
@@ -728,7 +748,7 @@ local function monitorJetWay(force)
     if not toLoadHub.phases.is_jetway and toLoadHub_Doors_1 == 2 then
         command_once("sim/ground_ops/jetway")
         toLoadHub.phases.is_jetway = true
-    elseif toLoadHub.phases.is_jetway and toLoadHub_Doors_1 == 0 then
+    elseif toLoadHub.phases.is_jetway and toLoadHub_Doors_1 == 0 and not toLoadHub.phases.is_landed then
         command_once("sim/ground_ops/jetway")
         toLoadHub.phases.is_jetway = false
     end
@@ -1030,7 +1050,7 @@ function viewToLoadHubWindow()
                 imgui.TextUnformatted(labelFuel .. " to " .. toLoadHub.fuel_to_load .. " " .. animate_dots())
                 imgui.PopStyleColor()
             end
-            if seatBeltStatus() then
+            if seatBeltStatusOn() then
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
                 imgui.TextUnformatted("Warning: seat belt signs on.")
                 imgui.PopStyleColor()
@@ -1186,7 +1206,7 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
 
         if isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0 then
-            if seatBeltStatus() then
+            if seatBeltStatusOn() then
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
                 imgui.TextUnformatted("Deboarding unavailable with seat belt signs on.")
                 imgui.PopStyleColor()
@@ -1650,7 +1670,7 @@ function startBoardingDeboardingOrWindow()
         startProcedure(true, toLoadHub.settings.door.open_boarding, "Boarding Started")
         is_open = true
     elseif toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and toLoadHub_onground_any > 0 and toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_deboarding and (isAnyDoorOpen() or toLoadHub.settings.door.open_deboarding > 0) then
-        if seatBeltStatus() then
+        if seatBeltStatusOn() then
             toLoadHub.wait_until_speak = os.time()
             toLoadHub.what_to_speak = "Deboarding unavailable with seat belt signs on."
         else
@@ -1797,7 +1817,7 @@ function toloadHubMainLoop()
     -- We Are Landed for focus
     if not toLoadHub.phases.is_landed and toLoadHub.phases.is_flying and toLoadHub_onground_any > 0 and isAllEngineOff() then
         toLoadHub.phases.is_landed = true
-        monitorJetWay(force)
+        monitorJetWay(true)
     end
 
     -- Deboarding Phase and Finishing Deboarding
