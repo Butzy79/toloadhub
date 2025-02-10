@@ -874,7 +874,7 @@ local function sendLoadsheetToToliss(data)
     toLoadHub.hoppie.loadsheet_sending = true
     local loadSheetContent = ""
     if data.typeL < 2 then
-        loadSheetContent = "/data2/313//NE/" .. table.concat({
+        loadSheetContent = "/data2/1" .. tostring(toLoadHub.version:gsub("[%.a]", "")) .. "//NE/" .. table.concat({
             "Loadsheet " .. data.labelText .. " " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("ZFW",  data.zfw, 9),
             formatRowLoadSheet("ZFWCG", data.zfwcg, 9),
@@ -888,7 +888,7 @@ local function sendLoadsheetToToliss(data)
             loadSheetContent = loadSheetContent .. "\n" .. formatRowLoadSheet("@WARN!@ F.BLK EXP.", data.warning, 22)
         end
     elseif data.typeL == 2 then
-        loadSheetContent = "/data2/323//NE/" .. table.concat({
+        loadSheetContent = "/data2/2" .. tostring(toLoadHub.version:gsub("[%.a]", "")) .. "//NE/" .. table.concat({
             "ACTUAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Chock out", toLoadHub.chocks_out_time, 22),
             formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
@@ -901,7 +901,7 @@ local function sendLoadsheetToToliss(data)
         elseif consumption > 0 then
             lblSaving = "Exceed @+" ..  string.format("%d",consumption) .. "@ " .. toLoadHub.unitLabel
         end
-        loadSheetContent = "/data2/333//NE/" .. table.concat({
+        loadSheetContent = "/data2/3" .. tostring(toLoadHub.version:gsub("[%.a]", "")) .. "//NE/" .. table.concat({
             "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Landing", toLoadHub.chocks_on_time, 22),
             formatRowLoadSheet("Chock in", toLoadHub.chocks_in_time, 22),
