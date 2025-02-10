@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fix
 - LIP.lua update
 - LBS Fuel issue (infinite refueling)
+- CPDLC Ids
 
 ## [1.1.2]- 2025-02-09
 ### Fix
