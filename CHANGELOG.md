@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [1.1.3]- 2025-02-09
 ### Fix
 - LIP.lua update
+- LBS Fuel issue (infinite refueling)
 
 ## [1.1.2]- 2025-02-09
 ### Fix
