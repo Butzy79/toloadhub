@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.1.2",
+    version = "1.1.3",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -580,7 +580,7 @@ local function resetAirplaneParameters(initJetway)
     end
     toLoadHub.setWeightCommand = false
     toLoadHub.flt_no = ""
-    toLoadHub.fuel_to_load = toLoadHub_m_fuel_total
+    toLoadHub.fuel_to_load = writeInUnitKg(toLoadHub_m_fuel_total)
     toLoadHub.fuel_to_load_next = os.time()
     toLoadHub.tank_num = 0
     for key in pairs(toLoadHub.phases) do
@@ -874,7 +874,7 @@ local function sendLoadsheetToToliss(data)
     toLoadHub.hoppie.loadsheet_sending = true
     local loadSheetContent = ""
     if data.typeL < 2 then
-        loadSheetContent = "/data2/313//NE/" .. table.concat({
+        loadSheetContent = "/data2/1" .. tostring(toLoadHub.version:gsub("[%.a]", "")) .. "//NE/" .. table.concat({
             "Loadsheet " .. data.labelText .. " " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("ZFW",  data.zfw, 9),
             formatRowLoadSheet("ZFWCG", data.zfwcg, 9),
@@ -888,7 +888,7 @@ local function sendLoadsheetToToliss(data)
             loadSheetContent = loadSheetContent .. "\n" .. formatRowLoadSheet("@WARN!@ F.BLK EXP.", data.warning, 22)
         end
     elseif data.typeL == 2 then
-        loadSheetContent = "/data2/323//NE/" .. table.concat({
+        loadSheetContent = "/data2/2" .. tostring(toLoadHub.version:gsub("[%.a]", "")) .. "//NE/" .. table.concat({
             "ACTUAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Chock out", toLoadHub.chocks_out_time, 22),
             formatRowLoadSheet("Take off", toLoadHub.chocks_off_time, 22),
@@ -901,7 +901,7 @@ local function sendLoadsheetToToliss(data)
         elseif consumption > 0 then
             lblSaving = "Exceed @+" ..  string.format("%d",consumption) .. "@ " .. toLoadHub.unitLabel
         end
-        loadSheetContent = "/data2/333//NE/" .. table.concat({
+        loadSheetContent = "/data2/3" .. tostring(toLoadHub.version:gsub("[%.a]", "")) .. "//NE/" .. table.concat({
             "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Landing", toLoadHub.chocks_on_time, 22),
             formatRowLoadSheet("Chock in", toLoadHub.chocks_in_time, 22),
@@ -1017,10 +1017,10 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("Fuel in Tank: %.0f " .. toLoadHub.unitLabel, writeInUnitKg(toLoadHub_m_fuel_total)))
             imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
             imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF007F00) -- bar color
-            imgui.ProgressBar((toLoadHub_m_fuel_total / toLoadHub.max_fuel), temp_window_size -15, 20)
+            imgui.ProgressBar((writeInUnitKg(toLoadHub_m_fuel_total) / toLoadHub.max_fuel), temp_window_size -15, 20)
             imgui.PopStyleColor()
             imgui.PopStyleColor()
-            local labelFuel = toLoadHub.fuel_to_load > toLoadHub_m_fuel_total and "Refueling" or "Defueling"
+            local labelFuel = toLoadHub.fuel_to_load > writeInUnitKg(toLoadHub_m_fuel_total) and "Refueling" or "Defueling"
             if not toLoadHub.phases.is_refueling and not toLoadHub.phases.is_defueling then
                 imgui.TextUnformatted("Requested fuel: ")
                 imgui.SameLine(120)
@@ -1029,10 +1029,10 @@ function viewToLoadHubWindow()
                     toLoadHub.fuel_to_load = math.max(100, math.min(tonumber(newFuelNumber), toLoadHub.max_fuel))
                 end
 
-                if (toLoadHub.fuel_to_load - toLoadHub_m_fuel_total >= toLoadHub.fueling_speed_per_second.refuel) or
-                   (toLoadHub_m_fuel_total - toLoadHub.fuel_to_load >= toLoadHub.fueling_speed_per_second.defuel) then
+                if (toLoadHub.fuel_to_load - writeInUnitKg(toLoadHub_m_fuel_total) >= toLoadHub.fueling_speed_per_second.refuel) or
+                   (writeInUnitKg(toLoadHub_m_fuel_total) - toLoadHub.fuel_to_load >= toLoadHub.fueling_speed_per_second.defuel) then
                     if imgui.Button("Start " .. labelFuel) then
-                        if toLoadHub.fuel_to_load > toLoadHub_m_fuel_total then
+                        if toLoadHub.fuel_to_load > writeInUnitKg(toLoadHub_m_fuel_total) then
                             toLoadHub.phases.is_defueling = false
                             toLoadHub.phases.is_refueling = true
                         else
@@ -1047,7 +1047,7 @@ function viewToLoadHubWindow()
                 end
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFEBCE87)
-                imgui.TextUnformatted(labelFuel .. " to " .. toLoadHub.fuel_to_load .. " " .. animate_dots())
+                imgui.TextUnformatted(labelFuel .. " to " .. string.format("%d ", toLoadHub.fuel_to_load) .. animate_dots())
                 imgui.PopStyleColor()
             end
             if seatBeltStatusOn() then
@@ -1646,10 +1646,10 @@ end
 function startRefuelingDeboardingOrWindow()
     if toLoadHub_onground_any > 0 and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
         if not toLoadHub.phases.is_refueling and not toLoadHub.phases.is_defueling then
-            if (toLoadHub.fuel_to_load - toLoadHub_m_fuel_total >= toLoadHub.fueling_speed_per_second.refuel) or 
-               (toLoadHub_m_fuel_total - toLoadHub.fuel_to_load >= toLoadHub.fueling_speed_per_second.defuel) then
-                local message = toLoadHub.fuel_to_load > toLoadHub_m_fuel_total and "Refueling" or "Defueling"
-                if toLoadHub.fuel_to_load > toLoadHub_m_fuel_total then
+            if (toLoadHub.fuel_to_load - writeInUnitKg(toLoadHub_m_fuel_total) >= toLoadHub.fueling_speed_per_second.refuel) or 
+               (writeInUnitKg(toLoadHub_m_fuel_total) - toLoadHub.fuel_to_load >= toLoadHub.fueling_speed_per_second.defuel) then
+                local message = toLoadHub.fuel_to_load > writeInUnitKg(toLoadHub_m_fuel_total) and "Refueling" or "Defueling"
+                if toLoadHub.fuel_to_load > writeInUnitKg(toLoadHub_m_fuel_total) then
                     toLoadHub.phases.is_defueling = false
                     toLoadHub.phases.is_refueling = true
                 else
@@ -1727,8 +1727,8 @@ function toloadHubMainLoop()
             toLoadHub.what_to_speak = labelFuel .. " halted, beacon lights activated."
             toLoadHub.visible_fuel = false
         else
-            if (toLoadHub_m_fuel_total >= toLoadHub.fuel_to_load and toLoadHub.phases.is_refueling) or
-               (toLoadHub_m_fuel_total <= toLoadHub.fuel_to_load and toLoadHub.phases.is_defueling) then
+            if (writeInUnitKg(toLoadHub_m_fuel_total) >= toLoadHub.fuel_to_load and toLoadHub.phases.is_refueling) or
+               (writeInUnitKg(toLoadHub_m_fuel_total) <= toLoadHub.fuel_to_load and toLoadHub.phases.is_defueling) then
                 toLoadHub.phases.is_refueling = false
                 toLoadHub.phases.is_defueling = false
                 toLoadHub.wait_until_speak = os.time()
@@ -1739,16 +1739,16 @@ function toloadHubMainLoop()
                     local tank_num = calculateTankNumber()
                     if toLoadHub.phases.is_refueling then
                         local fuel_to_add = (toLoadHub.fueling_speed_per_second.refuel / tank_num)
-                        if toLoadHub.fuel_to_load < toLoadHub_m_fuel_total + toLoadHub.fueling_speed_per_second.refuel then
-                            fuel_to_add = math.max(10, ((toLoadHub.fuel_to_load - toLoadHub_m_fuel_total) / tank_num))
+                        if toLoadHub.fuel_to_load < writeInUnitKg(toLoadHub_m_fuel_total) + toLoadHub.fueling_speed_per_second.refuel then
+                            fuel_to_add = math.max(10, ((toLoadHub.fuel_to_load - writeInUnitKg(toLoadHub_m_fuel_total)) / tank_num))
                         end
                         toLoadHub_fuel_1 = toLoadHub_fuel_1 + fuel_to_add
                         toLoadHub_fuel_2 = toLoadHub_fuel_2 + fuel_to_add
                         toLoadHub_fuel_3 = toLoadHub_fuel_3 + fuel_to_add
                     else
                         local fuel_to_remove = (toLoadHub.fueling_speed_per_second.defuel / tank_num)
-                        if toLoadHub.fuel_to_load > toLoadHub_m_fuel_total - toLoadHub.fueling_speed_per_second.defuel then
-                            fuel_to_remove = math.max(10, ((toLoadHub_m_fuel_total-toLoadHub.fuel_to_load) / tank_num))
+                        if toLoadHub.fuel_to_load > writeInUnitKg(toLoadHub_m_fuel_total) - toLoadHub.fueling_speed_per_second.defuel then
+                            fuel_to_remove = math.max(10, ((writeInUnitKg(toLoadHub_m_fuel_total)-toLoadHub.fuel_to_load) / tank_num))
                         end
                         toLoadHub_fuel_1 = toLoadHub_fuel_1 - fuel_to_remove
                         toLoadHub_fuel_2 = toLoadHub_fuel_2 - fuel_to_remove
@@ -1762,10 +1762,10 @@ function toloadHubMainLoop()
 
     -- Fuel Start and Stop
     if toLoadHub.fuel_engines_on == nil and toLoadHub.fuel_engines_off == nil and isAnyEngineBurningFuel() then
-        toLoadHub.fuel_engines_on = toLoadHub_m_fuel_total
+        toLoadHub.fuel_engines_on = writeInUnitKg(toLoadHub_m_fuel_total)
     end
     if toLoadHub.phases.is_flying and toLoadHub.phases.is_landed and toLoadHub.fuel_engines_on ~= nil and toLoadHub.fuel_engines_off == nil and not isAnyEngineBurningFuel() then
-        toLoadHub.fuel_engines_off = toLoadHub_m_fuel_total
+        toLoadHub.fuel_engines_off = writeInUnitKg(toLoadHub_m_fuel_total)
     end
 
     -- Onboarding Phase and Finishing Onboarding
