@@ -27,7 +27,7 @@ end
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.1.3",
+    version = "1.1.4",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -919,7 +919,7 @@ local function sendLoadsheetToToliss(data)
         loadSheetContent:gsub("\n", "%%0A")
     )
 
-    local _, code = http.request{
+    local resp, code = http.request{
         url = urls.hoppie_connect,
         method = "POST",
         headers = {
@@ -929,8 +929,13 @@ local function sendLoadsheetToToliss(data)
         source = ltn12.source.string(payload),
     }
     debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
+    debug(string.format("[%s] Hoppie url: %s.", toLoadHub.title, tostring(urls.hoppie_connect)))
+    debug(string.format("[%s] Hoppie response: %s.", toLoadHub.title, tostring(resp)))
+    debug(string.format("[%s] Hoppie payload: %s.", toLoadHub.title, tostring(payload)))
+    debug(string.format("[%s] Hoppie fulldata: %s.", toLoadHub.title, tostring(data)))
+
     if code == 200 and data.typeL == 0 then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
-    if code == 200 and data.typeL == 1  then toLoadHub.hoppie.loadsheet_sent = true end
+    if code == 200 and data.typeL == 1 then toLoadHub.hoppie.loadsheet_sent = true end
     if code == 200 and data.typeL == 2 then toLoadHub.hoppie.loadsheet_chocks_off_sent = true end
     if code == 200 and data.typeL == 3 then toLoadHub.hoppie.loadsheet_chocks_on_sent = true end
 
