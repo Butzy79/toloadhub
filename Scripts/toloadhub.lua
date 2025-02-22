@@ -2060,6 +2060,7 @@ if not valid_plane_icao[PLANE_ICAO] then
     if not toLoadHub.settings.general.mute_init_failed_validation_sound then
         XPLMSpeakString("Invalid Airplane for the ToLoad Hub Plugin")
     end
+    debug(string.format("[%s] Not Compatible with %s.", toLoadHub.title, tostring(PLANE_ICAO)))
     toLoadHub = nil
     loadsheetStructure = nil
     toloadhub_window = nil
@@ -2067,7 +2068,6 @@ if not valid_plane_icao[PLANE_ICAO] then
     LIP = nil
     http = nil
     ltn12 = nil
-    debug(string.format("[%s] Not Compatible with %s.", toLoadHub.title, tostring(PLANE_ICAO)))
     return
 end
 
