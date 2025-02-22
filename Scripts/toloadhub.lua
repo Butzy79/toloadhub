@@ -14,7 +14,7 @@
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.1.4",
+    version = "1.2.0",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -134,6 +134,8 @@ local toLoadHub = {
         total_burn = nil,
         taxi = nil,
         units = nil,
+        origin = nil,
+        destination = nil,
     },
     settings = {
         general = {
@@ -395,7 +397,7 @@ local function fetchSimbriefFPlan()
 
     local response_xml, statusCode = http.request(urls.simbrief_fplan_user .. toLoadHub.settings.simbrief.username)
 
-    if statusCode ~= 200 then
+    if statusCode ~= 200 and statusCode ~= 400 then
         toLoadHub.error_message = "Simbrief error, please try again."
         debug(string.format("[%s] SimBrief API returned an error: [%d]", toLoadHub.title, statusCode))
         return false
@@ -403,10 +405,18 @@ local function fetchSimbriefFPlan()
 
     local xml_data = xml.eval(response_xml)
     if not xml_data then
+        toLoadHub.error_message = "Simbrief error, please try again."
         debug(string.format("[%s] XML from SimBrief not valid.", toLoadHub.title))
         return false
     end
+
     local status = xml_data:find("status")
+    if statusCode == 400 and status and status[1] then
+        toLoadHub.error_message = 'SimBrief ' .. status[1]
+        debug(string.format("[%s] SimBrief code [%d] status: [%s]", toLoadHub.title, statusCode, status[1]))
+        return false
+    end
+
     if not status or status[1]  ~= "Success" then
         debug(string.format("[%s] Simbrief Status not Success.", toLoadHub.title))
         return false
@@ -419,6 +429,18 @@ local function fetchSimbriefFPlan()
         local r = 0.01 * math.random(95, 103)
         toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
+    end
+    local origin_tag = xml_data:find("origin")
+    local origin = origin_tag:find("icao_code")
+    toLoadHub.simbrief.origin = origin[1]
+
+    local destination_tag = xml_data:find("destination")
+    local destination = destination_tag:find("icao_code")
+    toLoadHub.simbrief.destination = destination[1]
+
+    if toLoadHub.visible_main and toLoadHub.simbrief.origin and toLoadHub.simbrief.destination then
+        float_wnd_set_title(toloadhub_window, string.format("%s - v%s | %s - %s", toLoadHub.title, toLoadHub.version,
+            toLoadHub.simbrief.origin, toLoadHub.simbrief.destination))
     end
 
     local callsign = xml_data:find("callsign")
@@ -939,7 +961,12 @@ function openToLoadHubWindow(isNew)
         toloadhub_window = float_wnd_create(toLoadHub.settings.general.window_width, toLoadHub.settings.general.window_height, 1, true)
         float_wnd_set_position(toloadhub_window, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
     end
-    float_wnd_set_title(toloadhub_window, string.format("%s - v%s", toLoadHub.title, toLoadHub.version))
+    if toLoadHub.simbrief.origin and toLoadHub.simbrief.destination then
+        float_wnd_set_title(toloadhub_window, string.format("%s - v%s | %s - %s", toLoadHub.title, toLoadHub.version,
+         toLoadHub.simbrief.origin, toLoadHub.simbrief.destination))
+    else
+        float_wnd_set_title(toloadhub_window, string.format("%s - v%s", toLoadHub.title, toLoadHub.version))
+    end
     float_wnd_set_imgui_builder(toloadhub_window, "viewToLoadHubWindow")
     float_wnd_set_onclose(toloadhub_window, "closeToLoadHubWindow")
     toLoadHub.visible_main = true
@@ -1485,7 +1512,7 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Auto Jetway Management", toLoadHub.settings.general.automate_jetway)
     if changed then toLoadHub.settings.general.automate_jetway , setSave = newval, true end
     
-    changed, newval = imgui.Checkbox("Mute the 'Invalid Airplane' message for ToloadHUB.", toLoadHub.settings.general.mute_init_failed_validation_sound)
+    changed, newval = imgui.Checkbox("Mute the 'Invalid Airplane' message for ToloadHUB", toLoadHub.settings.general.mute_init_failed_validation_sound)
     if changed then toLoadHub.settings.general.mute_init_failed_validation_sound , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Debug Mode", toLoadHub.settings.general.debug)
