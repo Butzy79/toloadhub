@@ -164,6 +164,7 @@ local toLoadHub = {
             username = "",
             auto_fetch = true,
             randomize_passenger = true,
+            round_up_fuel = 2 -- 0 = off, 1 = 10, 2 = 50, 3 = 100
         },
         hoppie = {
             secret = "",
@@ -228,7 +229,7 @@ require("LuaXml")
 math.randomseed(os.time())
 
 -- == Helper Functions ==
-function animate_dots()
+local function animate_dots()
     if os.clock() > toLoadHub.fuel_dots_time then 
         toLoadHub.fuel_dots_index = (toLoadHub.fuel_dots_index + 1) % 6
         toLoadHub.fuel_dots_time = os.clock() + 0.2
@@ -236,6 +237,19 @@ function animate_dots()
     local str = string.rep(".", toLoadHub.fuel_dots_index)
     return str .. string.rep(" ", 6 - #str)
 end
+
+local function round_up_to_unit(number)
+    -- 0 = off, 1 = 10, 2 = 50, 3 = 100
+    if toLoadHub.settings.simbrief.round_up_fuel == 1 then
+         return math.ceil(number / 10) * 10
+    elseif toLoadHub.settings.simbrief.round_up_fuel == 2 then
+        return math.ceil(number / 50) * 50
+    elseif toLoadHub.settings.simbrief.round_up_fuel == 3 then
+        return math.ceil(number / 100) * 100
+    end
+    return number
+end
+
 
 local function convertToKgs(value)
     return value / 2.205
@@ -327,7 +341,6 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
 end
 
 -- == Utility Functions ==
-
 function saveSettingsToFileToLoadHub(final)
     debug(string.format("[%s] saveSettingsToFileToLoadHub(%s)", toLoadHub.title, tostring(final)))
     LIP.save(SCRIPT_DIRECTORY .. toLoadHub.file, toLoadHub.settings)
@@ -476,7 +489,7 @@ local function fetchSimbriefFPlan()
     
     local plan_ramp = xml_data:find("plan_ramp")
     toLoadHub.simbrief.plan_ramp = tonumber(plan_ramp[1])
-    toLoadHub.fuel_to_load = toLoadHub.simbrief.plan_ramp
+    toLoadHub.fuel_to_load = round_up_to_unit(toLoadHub.simbrief.plan_ramp)
 
     local total_burn = xml_data:find("total_burn")
     toLoadHub.simbrief.total_burn = tonumber(total_burn[1])
@@ -611,7 +624,7 @@ local function resetAirplaneParameters(initJetway)
     end
     toLoadHub.setWeightCommand = false
     toLoadHub.flt_no = ""
-    toLoadHub.fuel_to_load = writeInUnitKg(toLoadHub_m_fuel_total)
+    toLoadHub.fuel_to_load = round_up_to_unit(writeInUnitKg(toLoadHub_m_fuel_total))
     toLoadHub.fuel_to_load_next = os.time()
     toLoadHub.tank_num = 0
     for key in pairs(toLoadHub.phases) do
@@ -1553,6 +1566,27 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Randomize Passenger", toLoadHub.settings.simbrief.randomize_passenger)
     if changed then toLoadHub.settings.simbrief.randomize_passenger , setSave = newval, true end
+
+    imgui.TextUnformatted("Round up the fuel:")
+    if imgui.RadioButton("No##roundup", toLoadHub.settings.simbrief.round_up_fuel == 0) then
+        toLoadHub.settings.simbrief.round_up_fuel = 0
+        setSave = true
+    end
+    imgui.SameLine(55)
+    if imgui.RadioButton("10 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 1) then
+        toLoadHub.settings.simbrief.round_up_fuel = 1
+        setSave = true
+    end
+    imgui.SameLine(143)
+    if imgui.RadioButton("50 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 2) then
+        toLoadHub.settings.simbrief.round_up_fuel = 2
+        setSave = true
+    end
+    imgui.SameLine(230)
+    if imgui.RadioButton("100 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 3) then
+        toLoadHub.settings.simbrief.round_up_fuel = 3
+        setSave = true
+    end
 
     imgui.Separator()
     imgui.Spacing()
