@@ -38,7 +38,8 @@ Not visibile if Starting with loading cargo is checked.
 ### SimBrief Settings  
 - **Username**: Your SimBrief username.
 - **Auto Fetch at Beginning**: Automatically fetches data from SimBrief when the plugin loads.  
-- **Randomize Passenger**: Simulates real passenger variations based on SimBrief data. For example, if SimBrief indicates 100 passengers, some may not board, or extra passengers may be simulated.  
+- **Randomize Passenger**: Simulates real passenger variations based on SimBrief data. For example, if SimBrief indicates 100 passengers, some may not board, or extra passengers may be simulated.
+- **Round up the fuel**: This setting allows you to round up fuel to the nearest 10, 50, or 100. If 'No' is selected, the fuel amount remains unchanged.
 
 ### Hoppie Settings
 - **Secret**: The password or secret received during registration at [hoppie.nl](https://www.hoppie.nl).
