@@ -1,5 +1,7 @@
 # Changelog  
 ## [1.2.1]- 2025-02-22
+### Added
+- Messages for refuelling command
 ### Fix
 - Toggle window command not correct
   
