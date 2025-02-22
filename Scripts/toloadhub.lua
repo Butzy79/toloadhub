@@ -92,6 +92,8 @@ local toLoadHub = {
     fuel_dots_index = 0,
     fuel_dots_time = os.clock(),
     toggle_window = os.clock(),
+    toggle_fuel = os.clock(),
+    toggle_pax = os.clock(),
     boarding_secnds_per_pax = 0,
     set_default_seconds = false,
     simulate_result = false,
@@ -1725,6 +1727,8 @@ function resetPositionToloadHubWindow()
 end
 
 function startRefuelingDeboardingOrWindow()
+    if os.clock() < toLoadHub.toggle_fuel then return end
+    toLoadHub.toggle_fuel = os.clock() + 1
     if toLoadHub_onground_any > 0 and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
         if not toLoadHub.phases.is_refueling and not toLoadHub.phases.is_defueling then
             if (toLoadHub.fuel_to_load - writeInUnitKg(toLoadHub_m_fuel_total) >= toLoadHub.fueling_speed_per_second.refuel) or 
@@ -1751,6 +1755,8 @@ function startRefuelingDeboardingOrWindow()
 end
 
 function startBoardingDeboardingOrWindow()
+    if os.clock() < toLoadHub.toggle_pax then return end
+    toLoadHub.toggle_pax = os.clock() + 1
     local is_open = false
     if toLoadHub_onground_any > 0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and (isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0) then
         toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
