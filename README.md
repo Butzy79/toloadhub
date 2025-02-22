@@ -31,13 +31,15 @@ Not visibile if Starting with loading cargo is checked.
 - **Starting with loading cargo**: When selected, cargo loading will begin, and passengers will require a manual action via a button to start boarding. The button will be visible during the loading process.
 - **Use Imperial Units**: Set Imperial units. SimBrief has priority over this value. If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.
 - **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
+- **Mute the 'Invalid Airplane' message for ToloadHUB**: Mute the initial message if the airplane ICAO is not compatibile with ToLoadHUB
 - **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.
 - **Auto Jetway Management**: If enabled, the jetway is automatically attached and detached from the airplane.
 
 ### SimBrief Settings  
 - **Username**: Your SimBrief username.
 - **Auto Fetch at Beginning**: Automatically fetches data from SimBrief when the plugin loads.  
-- **Randomize Passenger**: Simulates real passenger variations based on SimBrief data. For example, if SimBrief indicates 100 passengers, some may not board, or extra passengers may be simulated.  
+- **Randomize Passenger**: Simulates real passenger variations based on SimBrief data. For example, if SimBrief indicates 100 passengers, some may not board, or extra passengers may be simulated.
+- **Round up the fuel**: This setting allows you to round up fuel to the nearest 10, 50, or 100. If 'No' is selected, the fuel amount remains unchanged.
 
 ### Hoppie Settings
 - **Secret**: The password or secret received during registration at [hoppie.nl](https://www.hoppie.nl).

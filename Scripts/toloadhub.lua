@@ -2,9 +2,6 @@
     ToLoadHUB
     Author: Manta32
     Special thanks to: Giulio Cataldo for the night spent suffering with me
-    Initial project by: @piotr-tomczyk aka @travisair
-    Thanks to: @hotbso for the idea
-    Extra thanks to: @Qlaudie73 for the new features, and @Pilot4XP for the valuable information
     Description:
     A FlyWithLua plugin for X-Plane 12 to manage passengers and loadsheet for ToLISS airplanes.
     Features include automatic loading from SimBrief, random passenger generation, and real-time loading.
@@ -15,19 +12,11 @@
 
 ---@diagnostic disable: undefined-global
 local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A346 = true, A339 = true }
-if not valid_plane_icao[PLANE_ICAO] then
-    XPLMSpeakString("Invalid Airplane for the ToLoad Hub Plugin")
-    return
-end
-
---    Airstair vs Jetbridge--
---    Jetbridge:
---    A319 A20N: Only L1
 
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.1.3",
+    version = "1.2.0",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -147,6 +136,8 @@ local toLoadHub = {
         total_burn = nil,
         taxi = nil,
         units = nil,
+        origin = nil,
+        destination = nil,
     },
     settings = {
         general = {
@@ -166,12 +157,14 @@ local toLoadHub = {
             is_jetbridge = false,
             simulate_jdgh = false,
             automate_jetway = false,
-            is_lbs = false
+            is_lbs = false,
+            mute_init_failed_validation_sound = false,
         },
         simbrief = {
             username = "",
             auto_fetch = true,
             randomize_passenger = true,
+            round_up_fuel = 1 -- 0 = off, 1 = 10, 2 = 50, 3 = 100
         },
         hoppie = {
             secret = "",
@@ -236,7 +229,7 @@ require("LuaXml")
 math.randomseed(os.time())
 
 -- == Helper Functions ==
-function animate_dots()
+local function animate_dots()
     if os.clock() > toLoadHub.fuel_dots_time then 
         toLoadHub.fuel_dots_index = (toLoadHub.fuel_dots_index + 1) % 6
         toLoadHub.fuel_dots_time = os.clock() + 0.2
@@ -244,6 +237,19 @@ function animate_dots()
     local str = string.rep(".", toLoadHub.fuel_dots_index)
     return str .. string.rep(" ", 6 - #str)
 end
+
+local function round_up_to_unit(number)
+    -- 0 = off, 1 = 10, 2 = 50, 3 = 100
+    if toLoadHub.settings.simbrief.round_up_fuel == 1 then
+         return math.ceil(number / 10) * 10
+    elseif toLoadHub.settings.simbrief.round_up_fuel == 2 then
+        return math.ceil(number / 50) * 50
+    elseif toLoadHub.settings.simbrief.round_up_fuel == 3 then
+        return math.ceil(number / 100) * 100
+    end
+    return number
+end
+
 
 local function convertToKgs(value)
     return value / 2.205
@@ -335,7 +341,6 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
 end
 
 -- == Utility Functions ==
-
 function saveSettingsToFileToLoadHub(final)
     debug(string.format("[%s] saveSettingsToFileToLoadHub(%s)", toLoadHub.title, tostring(final)))
     LIP.save(SCRIPT_DIRECTORY .. toLoadHub.file, toLoadHub.settings)
@@ -349,14 +354,16 @@ local function readSettingsToFile()
     if not f then return end
     for section, settings in pairs(f) do
         if toLoadHub.settings[section] then
-            for key, value in pairs(settings) do
-                if toLoadHub.settings[section][key] ~= nil then
-                    if type(toLoadHub.settings[section][key]) == 'boolean' then
-                        toLoadHub.settings[section][key] = toBoolean(value)
-                    elseif type(toLoadHub.settings[section][key]) == 'number' then
-                        toLoadHub.settings[section][key] = math.floor(value)
-                    else
-                        toLoadHub.settings[section][key] = value
+            if toLoadHub.settings[section] ~= nil then
+                for key, value in pairs(settings) do
+                    if toLoadHub.settings[section][key] ~= nil then
+                        if type(toLoadHub.settings[section][key]) == 'boolean' then
+                            toLoadHub.settings[section][key] = toBoolean(value)
+                        elseif type(toLoadHub.settings[section][key]) == 'number' then
+                            toLoadHub.settings[section][key] = math.floor(value)
+                        else
+                            toLoadHub.settings[section][key] = value
+                        end
                     end
                 end
             end
@@ -405,7 +412,7 @@ local function fetchSimbriefFPlan()
 
     local response_xml, statusCode = http.request(urls.simbrief_fplan_user .. toLoadHub.settings.simbrief.username)
 
-    if statusCode ~= 200 then
+    if statusCode ~= 200 and statusCode ~= 400 then
         toLoadHub.error_message = "Simbrief error, please try again."
         debug(string.format("[%s] SimBrief API returned an error: [%d]", toLoadHub.title, statusCode))
         return false
@@ -413,14 +420,42 @@ local function fetchSimbriefFPlan()
 
     local xml_data = xml.eval(response_xml)
     if not xml_data then
+        toLoadHub.error_message = "Simbrief error, please try again."
         debug(string.format("[%s] XML from SimBrief not valid.", toLoadHub.title))
         return false
     end
+
     local status = xml_data:find("status")
+    if statusCode == 400 and status and status[1] then
+        toLoadHub.error_message = 'SimBrief ' .. status[1]
+        debug(string.format("[%s] SimBrief code [%d] status: [%s]", toLoadHub.title, statusCode, status[1]))
+        return false
+    end
+
     if not status or status[1]  ~= "Success" then
+        toLoadHub.error_message = "Simbrief error, please try again."
         debug(string.format("[%s] Simbrief Status not Success.", toLoadHub.title))
         return false
     end
+    -- ICAO VERIFICATION
+    local origin_tag = xml_data:find("origin")
+    local origin = origin_tag:find("icao_code")
+    toLoadHub.simbrief.origin = origin[1]
+    if toLoadHub.simbrief.origin then
+        local next_airport_index = XPLMFindNavAid( nil, nil, LATITUDE, LONGITUDE, nil, xplm_Nav_Airport)
+        if next_airport_index then
+            local _, _, _, _, _, _, airpICAO, airpNAME = XPLMGetNavAidInfo( next_airport_index )
+            if airpICAO:lower() ~= toLoadHub.simbrief.origin:lower() then
+                toLoadHub.error_message = string.format("SimBrief flight plan departure from %s \ndoes not match current location %s (%s).", toLoadHub.simbrief.origin, 
+                    airpNAME, airpICAO) 
+                debug(string.format("[%s] Simbrief ICAO Not matching %s -> %s", toLoadHub.title, 
+                    toLoadHub.simbrief.origin, airpICAO))
+                toLoadHub.simbrief.origin = nil
+                return false
+            end
+        end
+    end
+
     local pax_count = xml_data:find("pax_count")
     toLoadHub.pax_count = tonumber(pax_count[1])
     toLoadHub.simbrief.pax_count = toLoadHub.pax_count
@@ -429,6 +464,15 @@ local function fetchSimbriefFPlan()
         local r = 0.01 * math.random(95, 103)
         toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
+    end
+
+    local destination_tag = xml_data:find("destination")
+    local destination = destination_tag:find("icao_code")
+    toLoadHub.simbrief.destination = destination[1]
+
+    if toLoadHub.visible_main and toLoadHub.simbrief.origin and toLoadHub.simbrief.destination then
+        float_wnd_set_title(toloadhub_window, string.format("%s - v%s | %s - %s", toLoadHub.title, toLoadHub.version,
+            toLoadHub.simbrief.origin, toLoadHub.simbrief.destination))
     end
 
     local callsign = xml_data:find("callsign")
@@ -445,7 +489,7 @@ local function fetchSimbriefFPlan()
     
     local plan_ramp = xml_data:find("plan_ramp")
     toLoadHub.simbrief.plan_ramp = tonumber(plan_ramp[1])
-    toLoadHub.fuel_to_load = toLoadHub.simbrief.plan_ramp
+    toLoadHub.fuel_to_load = round_up_to_unit(toLoadHub.simbrief.plan_ramp)
 
     local total_burn = xml_data:find("total_burn")
     toLoadHub.simbrief.total_burn = tonumber(total_burn[1])
@@ -580,7 +624,7 @@ local function resetAirplaneParameters(initJetway)
     end
     toLoadHub.setWeightCommand = false
     toLoadHub.flt_no = ""
-    toLoadHub.fuel_to_load = writeInUnitKg(toLoadHub_m_fuel_total)
+    toLoadHub.fuel_to_load = round_up_to_unit(writeInUnitKg(toLoadHub_m_fuel_total))
     toLoadHub.fuel_to_load_next = os.time()
     toLoadHub.tank_num = 0
     for key in pairs(toLoadHub.phases) do
@@ -919,7 +963,7 @@ local function sendLoadsheetToToliss(data)
         loadSheetContent:gsub("\n", "%%0A")
     )
 
-    local _, code = http.request{
+    local resp, code = http.request{
         url = urls.hoppie_connect,
         method = "POST",
         headers = {
@@ -929,8 +973,13 @@ local function sendLoadsheetToToliss(data)
         source = ltn12.source.string(payload),
     }
     debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
+    debug(string.format("[%s] Hoppie url: %s.", toLoadHub.title, tostring(urls.hoppie_connect)))
+    debug(string.format("[%s] Hoppie response: %s.", toLoadHub.title, tostring(resp)))
+    debug(string.format("[%s] Hoppie payload: %s.", toLoadHub.title, tostring(payload)))
+    debug(string.format("[%s] Hoppie fulldata: %s.", toLoadHub.title, tostring(data)))
+
     if code == 200 and data.typeL == 0 then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
-    if code == 200 and data.typeL == 1  then toLoadHub.hoppie.loadsheet_sent = true end
+    if code == 200 and data.typeL == 1 then toLoadHub.hoppie.loadsheet_sent = true end
     if code == 200 and data.typeL == 2 then toLoadHub.hoppie.loadsheet_chocks_off_sent = true end
     if code == 200 and data.typeL == 3 then toLoadHub.hoppie.loadsheet_chocks_on_sent = true end
 
@@ -944,7 +993,12 @@ function openToLoadHubWindow(isNew)
         toloadhub_window = float_wnd_create(toLoadHub.settings.general.window_width, toLoadHub.settings.general.window_height, 1, true)
         float_wnd_set_position(toloadhub_window, toLoadHub.settings.general.window_x, toLoadHub.settings.general.window_y)
     end
-    float_wnd_set_title(toloadhub_window, string.format("%s - v%s", toLoadHub.title, toLoadHub.version))
+    if toLoadHub.simbrief.origin and toLoadHub.simbrief.destination then
+        float_wnd_set_title(toloadhub_window, string.format("%s - v%s | %s - %s", toLoadHub.title, toLoadHub.version,
+         toLoadHub.simbrief.origin, toLoadHub.simbrief.destination))
+    else
+        float_wnd_set_title(toloadhub_window, string.format("%s - v%s", toLoadHub.title, toLoadHub.version))
+    end
     float_wnd_set_imgui_builder(toloadhub_window, "viewToLoadHubWindow")
     float_wnd_set_onclose(toloadhub_window, "closeToLoadHubWindow")
     toLoadHub.visible_main = true
@@ -973,7 +1027,7 @@ function viewToLoadHubWindow()
         local vrwinWidth, vrwinHeight = float_wnd_get_geometry(toloadhub_window)
         toLoadHub.settings.general.window_height = vrwinHeight
         toLoadHub.settings.general.window_width = vrwinWidth
-    end
+    end 
 
     if toLoadHub.error_message ~= nil then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
@@ -1017,7 +1071,7 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("Fuel in Tank: %.0f " .. toLoadHub.unitLabel, writeInUnitKg(toLoadHub_m_fuel_total)))
             imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
             imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF007F00) -- bar color
-            imgui.ProgressBar((writeInUnitKg(toLoadHub_m_fuel_total) / toLoadHub.max_fuel), temp_window_size -15, 20)
+            imgui.ProgressBar((writeInUnitKg(toLoadHub_m_fuel_total) / toLoadHub.max_fuel), temp_window_size -16    , 20)
             imgui.PopStyleColor()
             imgui.PopStyleColor()
             local labelFuel = toLoadHub.fuel_to_load > writeInUnitKg(toLoadHub_m_fuel_total) and "Refueling" or "Defueling"
@@ -1489,6 +1543,9 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Auto Jetway Management", toLoadHub.settings.general.automate_jetway)
     if changed then toLoadHub.settings.general.automate_jetway , setSave = newval, true end
+    
+    changed, newval = imgui.Checkbox("Mute the 'Invalid Airplane' message for ToloadHUB", toLoadHub.settings.general.mute_init_failed_validation_sound)
+    if changed then toLoadHub.settings.general.mute_init_failed_validation_sound , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Debug Mode", toLoadHub.settings.general.debug)
     if changed then toLoadHub.settings.general.debug , setSave = newval, true end
@@ -1509,6 +1566,27 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Randomize Passenger", toLoadHub.settings.simbrief.randomize_passenger)
     if changed then toLoadHub.settings.simbrief.randomize_passenger , setSave = newval, true end
+
+    imgui.TextUnformatted("Round up the fuel:")
+    if imgui.RadioButton("No##roundup", toLoadHub.settings.simbrief.round_up_fuel == 0) then
+        toLoadHub.settings.simbrief.round_up_fuel = 0
+        setSave = true
+    end
+    imgui.SameLine(55)
+    if imgui.RadioButton("10 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 1) then
+        toLoadHub.settings.simbrief.round_up_fuel = 1
+        setSave = true
+    end
+    imgui.SameLine(143)
+    if imgui.RadioButton("50 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 2) then
+        toLoadHub.settings.simbrief.round_up_fuel = 2
+        setSave = true
+    end
+    imgui.SameLine(230)
+    if imgui.RadioButton("100 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 3) then
+        toLoadHub.settings.simbrief.round_up_fuel = 3
+        setSave = true
+    end
 
     imgui.Separator()
     imgui.Spacing()
@@ -2028,6 +2106,22 @@ end
 
 -- == Main code ==
 debug(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
+readSettingsToFile()
+if not valid_plane_icao[PLANE_ICAO] then
+    if not toLoadHub.settings.general.mute_init_failed_validation_sound then
+        XPLMSpeakString("Invalid Airplane for the ToLoad Hub Plugin")
+    end
+    debug(string.format("[%s] Not Compatible with %s.", toLoadHub.title, tostring(PLANE_ICAO)))
+    toLoadHub = nil
+    loadsheetStructure = nil
+    toloadhub_window = nil
+    urls = nil
+    LIP = nil
+    http = nil
+    ltn12 = nil
+    return
+end
+
 dataref("toLoadHub_NoPax_XP", "AirbusFBW/NoPax", "writeable")
 dataref("toLoadHub_PaxDistrib_XP", "AirbusFBW/PaxDistrib", "writeable")
 dataref("toLoadHub_AftCargo_XP", "AirbusFBW/AftCargo", "writeable")
@@ -2041,7 +2135,6 @@ dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1
 dataref("toLoadHub_CargoDoors_3", "AirbusFBW/CargoDoorModeArray", "writeable", 2)
 dataref("toLoadHub_CateringDoors_1", "AirbusFBW/PaxDoorModeArray", "writeable", 1)
 dataref("toLoadHub_CateringDoors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 3)
-
 
 if XPLMFindDataRef("toliss_airbus/iscsinterface/currentCG") then
     dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonly")
@@ -2120,7 +2213,6 @@ else
 end
 
 setAirplaneNumbers()
-readSettingsToFile()
 
 if toLoadHub.settings.general.auto_init then
     resetAirplaneParameters(true)
