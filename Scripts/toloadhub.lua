@@ -11,6 +11,8 @@
 --]]
 
 ---@diagnostic disable: undefined-global
+local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A346 = true, A339 = true }
+
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
@@ -2054,11 +2056,17 @@ end
 -- == Main code ==
 debug(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
 readSettingsToFile()
-local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A346 = true, A339 = true }
 if not valid_plane_icao[PLANE_ICAO] then
     if not toLoadHub.settings.general.mute_init_failed_validation_sound then
         XPLMSpeakString("Invalid Airplane for the ToLoad Hub Plugin")
     end
+    toLoadHub = nil
+    loadsheetStructure = nil
+    toloadhub_window = nil
+    urls = nil
+    LIP = nil
+    http = nil
+    ltn12 = nil
     debug(string.format("[%s] Not Compatible with %s.", toLoadHub.title, tostring(PLANE_ICAO)))
     return
 end
