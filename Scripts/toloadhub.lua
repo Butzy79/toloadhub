@@ -164,7 +164,7 @@ local toLoadHub = {
             username = "",
             auto_fetch = true,
             randomize_passenger = true,
-            round_up_fuel = 2 -- 0 = off, 1 = 10, 2 = 50, 3 = 100
+            round_up_fuel = 1 -- 0 = off, 1 = 10, 2 = 50, 3 = 100
         },
         hoppie = {
             secret = "",
