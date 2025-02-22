@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Initial setting to mute the 'Invalid Airplane' message
 - SimBrief flight plan verification by location
+- Setting to round up the fuel to the nearest unit
 ### Fix
 - Minor visual adjustments
   
