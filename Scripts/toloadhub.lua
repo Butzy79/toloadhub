@@ -2,9 +2,6 @@
     ToLoadHUB
     Author: Manta32
     Special thanks to: Giulio Cataldo for the night spent suffering with me
-    Initial project by: @piotr-tomczyk aka @travisair
-    Thanks to: @hotbso for the idea
-    Extra thanks to: @Qlaudie73 for the new features, and @Pilot4XP for the valuable information
     Description:
     A FlyWithLua plugin for X-Plane 12 to manage passengers and loadsheet for ToLISS airplanes.
     Features include automatic loading from SimBrief, random passenger generation, and real-time loading.
@@ -14,16 +11,6 @@
 --]]
 
 ---@diagnostic disable: undefined-global
-local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A346 = true, A339 = true }
-if not valid_plane_icao[PLANE_ICAO] then
-    XPLMSpeakString("Invalid Airplane for the ToLoad Hub Plugin")
-    return
-end
-
---    Airstair vs Jetbridge--
---    Jetbridge:
---    A319 A20N: Only L1
-
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
@@ -166,7 +153,8 @@ local toLoadHub = {
             is_jetbridge = false,
             simulate_jdgh = false,
             automate_jetway = false,
-            is_lbs = false
+            is_lbs = false,
+            mute_init_failed_validation_sound = false,
         },
         simbrief = {
             username = "",
@@ -349,14 +337,16 @@ local function readSettingsToFile()
     if not f then return end
     for section, settings in pairs(f) do
         if toLoadHub.settings[section] then
-            for key, value in pairs(settings) do
-                if toLoadHub.settings[section][key] ~= nil then
-                    if type(toLoadHub.settings[section][key]) == 'boolean' then
-                        toLoadHub.settings[section][key] = toBoolean(value)
-                    elseif type(toLoadHub.settings[section][key]) == 'number' then
-                        toLoadHub.settings[section][key] = math.floor(value)
-                    else
-                        toLoadHub.settings[section][key] = value
+            if toLoadHub.settings[section] ~= nil then
+                for key, value in pairs(settings) do
+                    if toLoadHub.settings[section][key] ~= nil then
+                        if type(toLoadHub.settings[section][key]) == 'boolean' then
+                            toLoadHub.settings[section][key] = toBoolean(value)
+                        elseif type(toLoadHub.settings[section][key]) == 'number' then
+                            toLoadHub.settings[section][key] = math.floor(value)
+                        else
+                            toLoadHub.settings[section][key] = value
+                        end
                     end
                 end
             end
@@ -1022,7 +1012,7 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("Fuel in Tank: %.0f " .. toLoadHub.unitLabel, writeInUnitKg(toLoadHub_m_fuel_total)))
             imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
             imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF007F00) -- bar color
-            imgui.ProgressBar((writeInUnitKg(toLoadHub_m_fuel_total) / toLoadHub.max_fuel), temp_window_size -15, 20)
+            imgui.ProgressBar((writeInUnitKg(toLoadHub_m_fuel_total) / toLoadHub.max_fuel), temp_window_size -16    , 20)
             imgui.PopStyleColor()
             imgui.PopStyleColor()
             local labelFuel = toLoadHub.fuel_to_load > writeInUnitKg(toLoadHub_m_fuel_total) and "Refueling" or "Defueling"
@@ -1494,6 +1484,9 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Auto Jetway Management", toLoadHub.settings.general.automate_jetway)
     if changed then toLoadHub.settings.general.automate_jetway , setSave = newval, true end
+    
+    changed, newval = imgui.Checkbox("Mute the 'Invalid Airplane' message for ToloadHUB.", toLoadHub.settings.general.mute_init_failed_validation_sound)
+    if changed then toLoadHub.settings.general.mute_init_failed_validation_sound , setSave = newval, true end
 
     changed, newval = imgui.Checkbox("Debug Mode", toLoadHub.settings.general.debug)
     if changed then toLoadHub.settings.general.debug , setSave = newval, true end
@@ -2033,6 +2026,16 @@ end
 
 -- == Main code ==
 debug(string.format("[%s] Version %s initialized.", toLoadHub.title, toLoadHub.version))
+readSettingsToFile()
+local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A346 = true, A339 = true }
+if not valid_plane_icao[PLANE_ICAO] then
+    if not toLoadHub.settings.general.mute_init_failed_validation_sound then
+        XPLMSpeakString("Invalid Airplane for the ToLoad Hub Plugin")
+    end
+    debug(string.format("[%s] Not Compatible with %s.", toLoadHub.title, tostring(PLANE_ICAO)))
+    return
+end
+
 dataref("toLoadHub_NoPax_XP", "AirbusFBW/NoPax", "writeable")
 dataref("toLoadHub_PaxDistrib_XP", "AirbusFBW/PaxDistrib", "writeable")
 dataref("toLoadHub_AftCargo_XP", "AirbusFBW/AftCargo", "writeable")
@@ -2046,7 +2049,6 @@ dataref("toLoadHub_CargoDoors_2", "AirbusFBW/CargoDoorModeArray", "writeable", 1
 dataref("toLoadHub_CargoDoors_3", "AirbusFBW/CargoDoorModeArray", "writeable", 2)
 dataref("toLoadHub_CateringDoors_1", "AirbusFBW/PaxDoorModeArray", "writeable", 1)
 dataref("toLoadHub_CateringDoors_2", "AirbusFBW/PaxDoorModeArray", "writeable", 3)
-
 
 if XPLMFindDataRef("toliss_airbus/iscsinterface/currentCG") then
     dataref("toLoadHub_currentCG", "toliss_airbus/iscsinterface/currentCG", "readonly")
@@ -2125,7 +2127,6 @@ else
 end
 
 setAirplaneNumbers()
-readSettingsToFile()
 
 if toLoadHub.settings.general.auto_init then
     resetAirplaneParameters(true)
