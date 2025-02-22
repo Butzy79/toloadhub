@@ -16,7 +16,7 @@ local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.2.0",
+    version = "1.2.1",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -91,6 +91,7 @@ local toLoadHub = {
     },
     fuel_dots_index = 0,
     fuel_dots_time = os.clock(),
+    toggle_window = os.clock(),
     boarding_secnds_per_pax = 0,
     set_default_seconds = false,
     simulate_result = false,
@@ -1701,11 +1702,13 @@ function loadToloadHubWindow()
 end
 
 function toggleToloadHubWindow()
+    if os.clock() < toLoadHub.toggle_window then return end
+    toLoadHub.toggle_window = os.clock() + 1
     if toLoadHub.visible_main or toLoadHub.visible_settings then
         float_wnd_destroy(toloadhub_window)
-        return
+    else
+        loadToloadHubWindow()
     end
-    loadToloadHubWindow()
 end
 
 function resetPositionToloadHubWindow()
