@@ -1739,7 +1739,13 @@ function startRefuelingDeboardingOrWindow()
                 end
                 toLoadHub.wait_until_speak = os.time()
                 toLoadHub.what_to_speak = message .. " Started"
-            end      
+            else
+                toLoadHub.wait_until_speak = os.time()
+                toLoadHub.what_to_speak = "Fuel loaded as planned"   
+            end
+        else
+            toLoadHub.wait_until_speak = os.time()
+            toLoadHub.what_to_speak = "Refuelling not available"  
         end    
     end
 end
