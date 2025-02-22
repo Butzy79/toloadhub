@@ -420,9 +420,29 @@ local function fetchSimbriefFPlan()
     end
 
     if not status or status[1]  ~= "Success" then
+        toLoadHub.error_message = "Simbrief error, please try again."
         debug(string.format("[%s] Simbrief Status not Success.", toLoadHub.title))
         return false
     end
+    -- ICAO VERIFICATION
+    local origin_tag = xml_data:find("origin")
+    local origin = origin_tag:find("icao_code")
+    toLoadHub.simbrief.origin = origin[1]
+    if toLoadHub.simbrief.origin then
+        local next_airport_index = XPLMFindNavAid( nil, nil, LATITUDE, LONGITUDE, nil, xplm_Nav_Airport)
+        if next_airport_index then
+            local _, _, _, _, _, _, airpICAO, airpNAME = XPLMGetNavAidInfo( next_airport_index )
+            if airpICAO:lower() ~= toLoadHub.simbrief.origin:lower() then
+                toLoadHub.error_message = string.format("SimBrief flight plan departure from %s \ndoes not match current location %s (%s).", toLoadHub.simbrief.origin, 
+                    airpNAME, airpICAO) 
+                debug(string.format("[%s] Simbrief ICAO Not matching %s -> %s", toLoadHub.title, 
+                    toLoadHub.simbrief.origin, airpICAO))
+                toLoadHub.simbrief.origin = nil
+                return false
+            end
+        end
+    end
+
     local pax_count = xml_data:find("pax_count")
     toLoadHub.pax_count = tonumber(pax_count[1])
     toLoadHub.simbrief.pax_count = toLoadHub.pax_count
@@ -432,9 +452,6 @@ local function fetchSimbriefFPlan()
         toLoadHub.pax_count = math.floor(toLoadHub.pax_count * r)
         if toLoadHub.pax_count > toLoadHub.max_passenger then toLoadHub.pax_count = toLoadHub.max_passenger end
     end
-    local origin_tag = xml_data:find("origin")
-    local origin = origin_tag:find("icao_code")
-    toLoadHub.simbrief.origin = origin[1]
 
     local destination_tag = xml_data:find("destination")
     local destination = destination_tag:find("icao_code")
@@ -997,7 +1014,7 @@ function viewToLoadHubWindow()
         local vrwinWidth, vrwinHeight = float_wnd_get_geometry(toloadhub_window)
         toLoadHub.settings.general.window_height = vrwinHeight
         toLoadHub.settings.general.window_width = vrwinWidth
-    end
+    end 
 
     if toLoadHub.error_message ~= nil then
         imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF6666FF)
