@@ -210,8 +210,8 @@ local loadsheetStructure = {
 local ToloadHUBTimer = {
     new = function(self)
         local obj = {startTime = 0, elapsedTime = 0, isPaused = true, isRunning = false}
-        setmetatable(obj, self)
-        self.__index = self
+        setmetatable(obj, { __index = self })
+        obj:start()
         return obj
     end,
     start = function(self)
@@ -235,18 +235,17 @@ local ToloadHUBTimer = {
             return self.elapsedTime
         end
     end,
-    getFormattedTime = function(self, estimatedSeconds)
+    getFormattedTime = function(self, phase, estimatedSeconds)
         local seconds = math.max(0, estimatedSeconds - self:getTime())
-        if seconds < 60 then return "Less than a minute" end
-        local minutes = math.floor(seconds / 60)
+        if seconds < 20 then return string.format("%s completed in less than a minute", phase) end
+        local minutes = math.floor(seconds / 60) + 1
+        if self:getTime() <= 80 and minutes > 1 then minutes = minutes - 1 end
         local remainder = seconds % 60
         if remainder >= 40 then minutes = minutes + 1 end
-        return "~" .. minutes .. " min left"
-    end,
-    isInstanceOf = function(self, class)
-        return getmetatable(self) == class
+        return string.format("%s completed in about %d minute%s.", phase, minutes, minutes> 1.5 and "s" or "")
     end
 }
+
 
 local ToloadHUBDotAnimator = {
     new = function(self, delay, maxDots)
@@ -366,8 +365,8 @@ local function simulateLoadTime(pax_load_time, cargo_load_time)
     local next_pax_time = pax_load_time
     local next_cargo_time = cargo_load_time
 
-    local pax_on = 0
-    local cargo_on = 0
+    local pax_on = toLoadHub_NoPax
+    local cargo_on = toLoadHub_FwdCargo + toLoadHub_AftCargo
     local cargo_start = false
 
     local cargo_starts_at = math.random(toLoadHub.cargo_starting_range[1], toLoadHub.cargo_starting_range[2])
@@ -435,10 +434,11 @@ local function readSettingsToFile()
     end
 end
 
-local function operationEstimationTimeLeft()
-    if toLoadHub.time_operation and toLoadHub.time_operation:isInstanceOf(ToloadHUBTimer) then
+local function operationEstimationTimeLeft(phase)
+    if toLoadHub.time_operation and toLoadHub.settings.general.boarding_speed > 0 then
         local speed = toLoadHub.settings.general.boarding_speed
-        return ToloadHUBTimer:getFormattedTime(speed == 0 and toLoadHub.simulate_fast_value or toLoadHub.simulate_real_value)
+        return toLoadHub.time_operation:getFormattedTime(phase, speed == 1 and (toLoadHub.simulate_fast_value * 60)
+             or (toLoadHub.simulate_real_value * 60))
     end
     return ""
 end
@@ -921,7 +921,7 @@ local function startProcedure(is_boarding, door_setting, message)
     toLoadHub.next_cargo_check = os.time()
     toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
     toLoadHub.what_to_speak = message
-    toLoadHub.time_operation = ToloadHUBTimer:new():start()
+    toLoadHub.time_operation = ToloadHUBTimer:new()
 end
 
 local function focusOnToLoadHub()
@@ -1047,7 +1047,6 @@ local function sendLoadsheetToToliss(data)
     debug(string.format("[%s] Hoppie returning code %s.", toLoadHub.title, tostring(code)))
     debug(string.format("[%s] Hoppie url: %s.", toLoadHub.title, tostring(urls.hoppie_connect)))
     debug(string.format("[%s] Hoppie response: %s.", toLoadHub.title, tostring(resp)))
-    debug(string.format("[%s] Hoppie payload: %s.", toLoadHub.title, tostring(payload)))
     debug(string.format("[%s] Hoppie fulldata: %s.", toLoadHub.title, tostring(data)))
 
     if code == 200 and data.typeL == 0 then toLoadHub.hoppie.loadsheet_preliminary_sent = true end
@@ -1248,7 +1247,7 @@ function viewToLoadHubWindow()
     end
 
     -- Boarding started but Passenger are not boarding by setting
-    if toLoadHub.phases.is_onboarding and toLoadHub.settings.general.pax_delayed and not toLoadHub.phases.is_pax_onboard_enabled then
+    if not toLoadHub.phases.is_onboarding_pause and toLoadHub.phases.is_onboarding and toLoadHub.settings.general.pax_delayed and not toLoadHub.phases.is_pax_onboard_enabled then
         if imgui.Button("Start Boarding Passenger") then
             toLoadHub.phases.is_pax_onboard_enabled = true
         end
@@ -1259,6 +1258,7 @@ function viewToLoadHubWindow()
         if toLoadHub.pax_count > 0 and not toLoadHub.phases.is_pax_onboarded and (not toLoadHub.settings.general.pax_delayed or toLoadHub.phases.is_pax_onboard_enabled) then
             local temp_window_size = imgui.GetWindowSize()
             if toLoadHub.settings.simulation.opdisplay == 1 and temp_window_size ~= nil then
+                imgui.TextUnformatted(string.format("Boarding passengers (%s total):", tostring(toLoadHub.pax_count)))
                 imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
                 imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
                 imgui.ProgressBar(toLoadHub_NoPax / toLoadHub.pax_count, temp_window_size -16    , 20)
@@ -1266,7 +1266,7 @@ function viewToLoadHubWindow()
                 imgui.PopStyleColor()
             elseif toLoadHub.settings.simulation.opdisplay == 2 then
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-                imgui.TextUnformatted(toloadHub_dotsPax:animate())
+                imgui.TextUnformatted("Boarding passengers" .. toloadHub_dotsPax:animate())
                 imgui.PopStyleColor()
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
@@ -1284,7 +1284,9 @@ function viewToLoadHubWindow()
         end
         if toLoadHub.cargo > 0 and not toLoadHub.phases.is_cargo_onboarded then
             if toLoadHub.phases.is_cargo_started then
-                if toLoadHub.settings.simulation.opdisplay == 1 then
+                local temp_window_size = imgui.GetWindowSize()
+                if toLoadHub.settings.simulation.opdisplay == 1 and temp_window_size ~= nil then
+                    imgui.TextUnformatted(string.format("Cargo loading (%s total):", tostring(toLoadHub.cargo)))
                     imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
                     imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
                     imgui.ProgressBar((toLoadHub_FwdCargo + toLoadHub_AftCargo) / toLoadHub.cargo, temp_window_size -16    , 20)
@@ -1292,11 +1294,11 @@ function viewToLoadHubWindow()
                     imgui.PopStyleColor()
                 elseif toLoadHub.settings.simulation.opdisplay == 2 then
                     imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-                    imgui.TextUnformatted(toloadHub_dotsCargo:animate())
+                    imgui.TextUnformatted("Cargo loading" .. toloadHub_dotsCargo:animate())
                     imgui.PopStyleColor()
                 else
                     imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-                    imgui.TextUnformatted(string.format("Cargo in progress:"))
+                    imgui.TextUnformatted("Cargo in progress:")
                     imgui.Spacing()
                     imgui.SameLine(50)
                     imgui.TextUnformatted(string.format("FWD %.2f %s / %.2f %s loaded", writeInUnitKg(toLoadHub_FwdCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_fwd) / 1000, toLoadHub.unitTLabel))
@@ -1319,12 +1321,16 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("No extra cargo to load"))
             imgui.PopStyleColor()
         end
-        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-        imgui.TextUnformatted(string.format(operationEstimationTimeLeft()))
-        imgui.PopStyleColor()
+        if toLoadHub.settings.general.boarding_speed > 0 then
+            imgui.Separator()
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+            imgui.TextUnformatted(operationEstimationTimeLeft("Boarding"))
+            imgui.PopStyleColor()
 
-        if imgui.Button("Pause Boarding") then
-            toLoadHub.phases.is_onboarding_pause = true
+            if imgui.Button("Pause Boarding") then
+                toLoadHub.phases.is_onboarding_pause = true
+                toLoadHub.simulate_result = false
+            end
         end
     end
 
@@ -1340,6 +1346,7 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
         if imgui.Button("Resume Boarding") then
             toLoadHub.phases.is_onboarding_pause = false
+            toLoadHub.time_operation = ToloadHUBTimer:new()
         end
         imgui.SameLine(150)
         if imgui.Button("Reset") then
@@ -1397,9 +1404,23 @@ function viewToLoadHubWindow()
      -- Deboarding Phase
     if toLoadHub.phases.is_deboarding and not toLoadHub.phases.is_deboarding_pause and not toLoadHub.phases.is_deboarded then
         if toLoadHub_NoPax > 0 and not toLoadHub.phases.is_pax_deboarded then
-            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-            imgui.TextUnformatted(string.format("Deboarding in progress %s / %s deboarded", math.floor(toLoadHub.pax_count - toLoadHub_NoPax), toLoadHub.pax_count))
-            imgui.PopStyleColor()
+            local temp_window_size = imgui.GetWindowSize()
+            if toLoadHub.settings.simulation.opdisplay == 1 and temp_window_size ~= nil then
+                imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
+                imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
+                imgui.TextUnformatted(string.format("Deboarding passengers (%s total):", tostring(toLoadHub.pax_count)))
+                imgui.ProgressBar(math.floor(toLoadHub.pax_count - toLoadHub_NoPax) / toLoadHub.pax_count, temp_window_size -16    , 20)
+                imgui.PopStyleColor()
+                imgui.PopStyleColor()
+            elseif toLoadHub.settings.simulation.opdisplay == 2 then
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                imgui.TextUnformatted("Deboarding passengers" .. toloadHub_dotsPax:animate())
+                imgui.PopStyleColor()
+            else
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                imgui.TextUnformatted(string.format("Deboarding in progress %s / %s deboarded", math.floor(toLoadHub.pax_count - toLoadHub_NoPax), toLoadHub.pax_count))
+                imgui.PopStyleColor()
+            end
         elseif toLoadHub_NoPax == 0 and toLoadHub.phases.is_pax_deboarded then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
             imgui.TextUnformatted("Passenger deboarded")
@@ -1411,15 +1432,30 @@ function viewToLoadHubWindow()
         end
 
         if toLoadHub_FwdCargo + toLoadHub_AftCargo > 0 and not toLoadHub.phases.is_cargo_deboarded then
-            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-            imgui.TextUnformatted(string.format("Cargo offloading in progress:"))
-            imgui.Spacing()
-            imgui.SameLine(50)
-            imgui.TextUnformatted(string.format("FWD %.2f %s / %.2f %s offloaded", writeInUnitKg(toLoadHub.cargo_fwd - toLoadHub_FwdCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_fwd) / 1000, toLoadHub.unitTLabel))
-            imgui.Spacing()
-            imgui.SameLine(50)
-            imgui.TextUnformatted(string.format("AFT %.2f %s / %.2f %s offloaded", writeInUnitKg(toLoadHub.cargo_aft - toLoadHub_AftCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_aft) / 1000, toLoadHub.unitTLabel))
-            imgui.PopStyleColor()
+            local temp_window_size = imgui.GetWindowSize()
+            if toLoadHub.settings.simulation.opdisplay == 1 and temp_window_size ~= nil then
+                    imgui.TextUnformatted(string.format("Cargo offloading (%s total):", tostring(toLoadHub.cargo)))
+                    imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
+                    imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
+                    imgui.ProgressBar((toLoadHub.cargo - (toLoadHub_FwdCargo + toLoadHub_AftCargo)) / toLoadHub.cargo, temp_window_size -16    , 20)
+                    imgui.PopStyleColor()
+                    imgui.PopStyleColor()
+            elseif toLoadHub.settings.simulation.opdisplay == 2 then
+                    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                    imgui.TextUnformatted("Cargo offloading" .. toloadHub_dotsCargo:animate())
+                    imgui.PopStyleColor()
+            else
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                imgui.TextUnformatted("Cargo offloading in progress:")
+                imgui.Spacing()
+                imgui.SameLine(50)
+                imgui.TextUnformatted(string.format("FWD %.2f %s / %.2f %s offloaded", writeInUnitKg(toLoadHub.cargo_fwd - toLoadHub_FwdCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_fwd) / 1000, toLoadHub.unitTLabel))
+                imgui.Spacing()
+                imgui.SameLine(50)
+                imgui.TextUnformatted(string.format("AFT %.2f %s / %.2f %s offloaded", writeInUnitKg(toLoadHub.cargo_aft - toLoadHub_AftCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_aft) / 1000, toLoadHub.unitTLabel))
+                imgui.PopStyleColor()
+            end
+
         elseif toLoadHub_FwdCargo + toLoadHub_AftCargo == 0 and toLoadHub.phases.is_cargo_deboarded then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
             imgui.TextUnformatted("Cargo offloaded")
@@ -1429,11 +1465,15 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("No cargo to offload"))
             imgui.PopStyleColor()
         end
-        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-        imgui.TextUnformatted(string.format(operationEstimationTimeLeft()))
-        imgui.PopStyleColor()
-        if imgui.Button("Pause Deboarding") then
-            toLoadHub.phases.is_deboarding_pause = true
+        if toLoadHub.settings.general.boarding_speed > 0 then
+            imgui.Separator()
+            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+            imgui.TextUnformatted(operationEstimationTimeLeft("Deboarding"))
+            imgui.PopStyleColor()
+            if imgui.Button("Pause Deboarding") then
+                toLoadHub.phases.is_deboarding_pause = true
+                toLoadHub.simulate_result = false
+            end
         end
     end
 
@@ -1449,6 +1489,7 @@ function viewToLoadHubWindow()
         imgui.PopStyleColor()
         if imgui.Button("Resume Deboarding") then
             toLoadHub.phases.is_deboarding_pause = false
+            toLoadHub.time_operation = ToloadHUBTimer:new()
         end
         imgui.SameLine(150)
         if imgui.Button("Reset") then
@@ -1519,11 +1560,10 @@ function viewToLoadHubWindow()
 
             local labelFast = fastModeMinutes < 1
                 and "Fast (less than a minute)"
-                or string.format("Fast (%d minute%s)", fastModeMinutes, fastModeMinutes > 1 and "s" or "")
+                or string.format("Fast (%d minute%s)", fastModeMinutes, fastModeMinutes > 1.5 and "s" or "")
             local labelReal = realModeMinutes < 1
                 and "Real (less than a minute)"
-                or string.format("Real (%d minute%s)", realModeMinutes, realModeMinutes > 1 and "s" or "")
-
+                or string.format("Real (%d minute%s)", realModeMinutes, realModeMinutes > 1.5 and "s" or "")
             if not toLoadHub.set_default_seconds then
                 toLoadHub.set_default_seconds = true
                 if toLoadHub.settings.general.boarding_speed == 1 then
@@ -1645,14 +1685,14 @@ function viewToLoadHubWindowSettings()
         toLoadHub.settings.simulation.opdisplay = 0
         setSave = true
     end
-    imgui.SameLine(85)
+    imgui.SameLine(87)
     if imgui.RadioButton("Progress bar##opdisplay", toLoadHub.settings.simulation.opdisplay == 1) then
         toLoadHub.settings.simulation.opdisplay = 1
         setSave = true
     end
-    imgui.SameLine(230)
-    if imgui.RadioButton("Status text##opdisplay", toLoadHub.settings.simulation.opdisplay == 3) then
-        toLoadHub.settings.simulation.opdisplay = 3
+    imgui.SameLine(203)
+    if imgui.RadioButton("Status text##opdisplay", toLoadHub.settings.simulation.opdisplay == 2) then
+        toLoadHub.settings.simulation.opdisplay = 2
         setSave = true
     end
 
