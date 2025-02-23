@@ -65,10 +65,10 @@ Not visibile if Starting with loading cargo is checked.
 
 ## Command to Set
 In the settings, under **Controllers**, you can find a new command to assign to your key/button to open/close the ToLoad HUB window.  
-The command name is `FlyWithLua -> TOLOADHUB -> Toggle ToLoadHub Window`.
-You can assign a command to reset the window: `FlyWithLua -> TOLOADHUB -> Reset Position ToLoadHUB Window`
-You can assign a command to start onboard or deboard: `FlyWithLua -> TOLOADHUB -> Start Boarding/Deboarding`
-You can assign a command to start refuel or defuel: `FlyWithLua -> TOLOADHUB -> Start Refueling/Defueling`
+-The command name is `FlyWithLua -> TOLOADHUB -> Toggle ToLoadHub Window`.
+-You can assign a command to reset the window: `FlyWithLua -> TOLOADHUB -> Reset Position ToLoadHUB Window`
+-You can assign a command to start onboard or deboard: `FlyWithLua -> TOLOADHUB -> Start Boarding/Deboarding`
+-You can assign a command to start refuel or defuel: `FlyWithLua -> TOLOADHUB -> Start Refueling/Defueling`
 
 ## Contributing  
 Contributions are welcome! Feel free to submit pull requests or report issues to help improve the plugin.  
