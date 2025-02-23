@@ -16,7 +16,7 @@ local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.2.0",
+    version = "1.2.1",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -91,6 +91,9 @@ local toLoadHub = {
     },
     fuel_dots_index = 0,
     fuel_dots_time = os.clock(),
+    toggle_window = os.clock(),
+    toggle_fuel = os.clock(),
+    toggle_pax = os.clock(),
     boarding_secnds_per_pax = 0,
     set_default_seconds = false,
     simulate_result = false,
@@ -1573,17 +1576,17 @@ function viewToLoadHubWindowSettings()
         setSave = true
     end
     imgui.SameLine(55)
-    if imgui.RadioButton("10 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 1) then
+    if imgui.RadioButton("10 units##roundup", toLoadHub.settings.simbrief.round_up_fuel == 1) then
         toLoadHub.settings.simbrief.round_up_fuel = 1
         setSave = true
     end
     imgui.SameLine(143)
-    if imgui.RadioButton("50 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 2) then
+    if imgui.RadioButton("50 units##roundup", toLoadHub.settings.simbrief.round_up_fuel == 2) then
         toLoadHub.settings.simbrief.round_up_fuel = 2
         setSave = true
     end
     imgui.SameLine(230)
-    if imgui.RadioButton("100 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 3) then
+    if imgui.RadioButton("100 units##roundup", toLoadHub.settings.simbrief.round_up_fuel == 3) then
         toLoadHub.settings.simbrief.round_up_fuel = 3
         setSave = true
     end
@@ -1701,11 +1704,13 @@ function loadToloadHubWindow()
 end
 
 function toggleToloadHubWindow()
+    if os.clock() < toLoadHub.toggle_window then return end
+    toLoadHub.toggle_window = os.clock() + 1
     if toLoadHub.visible_main or toLoadHub.visible_settings then
         float_wnd_destroy(toloadhub_window)
-        return
+    else
+        loadToloadHubWindow()
     end
-    loadToloadHubWindow()
 end
 
 function resetPositionToloadHubWindow()
@@ -1722,6 +1727,8 @@ function resetPositionToloadHubWindow()
 end
 
 function startRefuelingDeboardingOrWindow()
+    if os.clock() < toLoadHub.toggle_fuel then return end
+    toLoadHub.toggle_fuel = os.clock() + 1
     if toLoadHub_onground_any > 0 and toLoadHub.settings.general.simulate_fuel and toLoadHub_beacon_lights_on == 0 then
         if not toLoadHub.phases.is_refueling and not toLoadHub.phases.is_defueling then
             if (toLoadHub.fuel_to_load - writeInUnitKg(toLoadHub_m_fuel_total) >= toLoadHub.fueling_speed_per_second.refuel) or 
@@ -1736,12 +1743,20 @@ function startRefuelingDeboardingOrWindow()
                 end
                 toLoadHub.wait_until_speak = os.time()
                 toLoadHub.what_to_speak = message .. " Started"
-            end      
+            else
+                toLoadHub.wait_until_speak = os.time()
+                toLoadHub.what_to_speak = "Fuel loaded as planned"   
+            end
+        else
+            toLoadHub.wait_until_speak = os.time()
+            toLoadHub.what_to_speak = "Refuelling not available"  
         end    
     end
 end
 
 function startBoardingDeboardingOrWindow()
+    if os.clock() < toLoadHub.toggle_pax then return end
+    toLoadHub.toggle_pax = os.clock() + 1
     local is_open = false
     if toLoadHub_onground_any > 0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding and (toLoadHub.pax_count > 0 or toLoadHub.cargo > 0) and (isAnyDoorOpen() or toLoadHub.settings.door.open_boarding > 0) then
         toLoadHub_PaxDistrib = math.random(toLoadHub.pax_distribution_range[1], toLoadHub.pax_distribution_range[2]) / 100
