@@ -163,7 +163,7 @@ local toLoadHub = {
             mute_init_failed_validation_sound = false,
         },
         simulation = {
-            opdisplay = 0
+            opdisplay = 1
         },
         simbrief = {
             username = "",
@@ -1252,7 +1252,6 @@ function viewToLoadHubWindow()
             toLoadHub.phases.is_pax_onboard_enabled = true
         end
     end
-
     -- Onboarding Phase
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         if toLoadHub.pax_count > 0 and not toLoadHub.phases.is_pax_onboarded and (not toLoadHub.settings.general.pax_delayed or toLoadHub.phases.is_pax_onboard_enabled) then
@@ -1260,7 +1259,7 @@ function viewToLoadHubWindow()
             if toLoadHub.settings.simulation.opdisplay == 1 and temp_window_size ~= nil then
                 imgui.TextUnformatted(string.format("Boarding passengers (%s total):", tostring(toLoadHub.pax_count)))
                 imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
-                imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
+                imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF49ABA4) -- bar color
                 imgui.ProgressBar(toLoadHub_NoPax / toLoadHub.pax_count, temp_window_size -16    , 20)
                 imgui.PopStyleColor()
                 imgui.PopStyleColor()
@@ -1286,9 +1285,9 @@ function viewToLoadHubWindow()
             if toLoadHub.phases.is_cargo_started then
                 local temp_window_size = imgui.GetWindowSize()
                 if toLoadHub.settings.simulation.opdisplay == 1 and temp_window_size ~= nil then
-                    imgui.TextUnformatted(string.format("Cargo loading (%s total):", tostring(toLoadHub.cargo)))
+                    imgui.TextUnformatted(string.format("Cargo loading (%.2f %s total):", toLoadHub.cargo / 1000, toLoadHub.unitTLabel)) 
                     imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
-                    imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
+                    imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF49ABA4) -- bar color
                     imgui.ProgressBar((toLoadHub_FwdCargo + toLoadHub_AftCargo) / toLoadHub.cargo, temp_window_size -16    , 20)
                     imgui.PopStyleColor()
                     imgui.PopStyleColor()
@@ -1407,7 +1406,7 @@ function viewToLoadHubWindow()
             local temp_window_size = imgui.GetWindowSize()
             if toLoadHub.settings.simulation.opdisplay == 1 and temp_window_size ~= nil then
                 imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
-                imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
+                imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF49ABA4) -- bar color
                 imgui.TextUnformatted(string.format("Deboarding passengers (%s total):", tostring(toLoadHub.pax_count)))
                 imgui.ProgressBar(math.floor(toLoadHub.pax_count - toLoadHub_NoPax) / toLoadHub.pax_count, temp_window_size -16    , 20)
                 imgui.PopStyleColor()
@@ -1434,9 +1433,9 @@ function viewToLoadHubWindow()
         if toLoadHub_FwdCargo + toLoadHub_AftCargo > 0 and not toLoadHub.phases.is_cargo_deboarded then
             local temp_window_size = imgui.GetWindowSize()
             if toLoadHub.settings.simulation.opdisplay == 1 and temp_window_size ~= nil then
-                    imgui.TextUnformatted(string.format("Cargo offloading (%s total):", tostring(toLoadHub.cargo)))
+                    imgui.TextUnformatted(string.format("Cargo offloading (%.2f %s total):", toLoadHub.cargo / 1000, toLoadHub.unitTLabel))
                     imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
-                    imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
+                    imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF49ABA4) -- bar color
                     imgui.ProgressBar((toLoadHub.cargo - (toLoadHub_FwdCargo + toLoadHub_AftCargo)) / toLoadHub.cargo, temp_window_size -16    , 20)
                     imgui.PopStyleColor()
                     imgui.PopStyleColor()
