@@ -1576,17 +1576,17 @@ function viewToLoadHubWindowSettings()
         setSave = true
     end
     imgui.SameLine(55)
-    if imgui.RadioButton("10 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 1) then
+    if imgui.RadioButton("10 units##roundup", toLoadHub.settings.simbrief.round_up_fuel == 1) then
         toLoadHub.settings.simbrief.round_up_fuel = 1
         setSave = true
     end
     imgui.SameLine(143)
-    if imgui.RadioButton("50 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 2) then
+    if imgui.RadioButton("50 units##roundup", toLoadHub.settings.simbrief.round_up_fuel == 2) then
         toLoadHub.settings.simbrief.round_up_fuel = 2
         setSave = true
     end
     imgui.SameLine(230)
-    if imgui.RadioButton("100 untis##roundup", toLoadHub.settings.simbrief.round_up_fuel == 3) then
+    if imgui.RadioButton("100 units##roundup", toLoadHub.settings.simbrief.round_up_fuel == 3) then
         toLoadHub.settings.simbrief.round_up_fuel = 3
         setSave = true
     end
