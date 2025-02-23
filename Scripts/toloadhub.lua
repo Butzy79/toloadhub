@@ -90,8 +90,6 @@ local toLoadHub = {
         all_unload = false,
         all_unloaded = false
     },
-    fuel_dots_index = 0,
-    fuel_dots_time = os.clock(),
     toggle_window = os.clock(),
     toggle_fuel = os.clock(),
     toggle_pax = os.clock(),
@@ -250,6 +248,33 @@ local ToloadHUBTimer = {
     end
 }
 
+local ToloadHUBDotAnimator = {
+    new = function(self, delay, maxDots)
+        local obj = {
+            dotsIndex = 0,
+            nextUpdateTime = os.clock(),
+            delay = delay or 0.2,
+            maxDots = maxDots or 6
+        }
+        setmetatable(obj, self)
+        self.__index = self
+        return obj
+    end,
+
+    animate = function(self)
+        if os.clock() > self.nextUpdateTime then
+            self.dotsIndex = (self.dotsIndex + 1) % self.maxDots
+            self.nextUpdateTime = os.clock() + self.delay
+        end
+        local str = string.rep(".", self.dotsIndex)
+        return str .. string.rep(" ", self.maxDots - #str)
+    end
+}
+
+local toloadHub_dotsFuel = ToloadHUBDotAnimator:new(0.2, 6)
+local toloadHub_dotsPax = ToloadHUBDotAnimator:new(0.2, 6)
+local toloadHub_dotsCargo = ToloadHUBDotAnimator:new(0.2, 6)
+
 local toloadhub_window = nil
 
 local urls = {
@@ -277,15 +302,6 @@ require("LuaXml")
 math.randomseed(os.time())
 
 -- == Helper Functions ==
-local function animate_dots()
-    if os.clock() > toLoadHub.fuel_dots_time then 
-        toLoadHub.fuel_dots_index = (toLoadHub.fuel_dots_index + 1) % 6
-        toLoadHub.fuel_dots_time = os.clock() + 0.2
-    end
-    local str = string.rep(".", toLoadHub.fuel_dots_index)
-    return str .. string.rep(" ", 6 - #str)
-end
-
 local function round_up_to_unit(number)
     -- 0 = off, 1 = 10, 2 = 50, 3 = 100
     if toLoadHub.settings.simbrief.round_up_fuel == 1 then
@@ -640,8 +656,6 @@ local function resetAirplaneParameters(initJetway)
     toLoadHub.cargo_aft = 0
     toLoadHub.cargo_fwd = 0
     toLoadHub.boarding_secnds_per_pax = 0
-    toLoadHub.fuel_dots_index = 0
-    toLoadHub.fuel_dots_time = os.clock()
     toLoadHub.simulate_result = false
     toLoadHub.visible_fuel = true
     toLoadHub.simulate_fast_value = 0
@@ -1159,7 +1173,7 @@ function viewToLoadHubWindow()
                 end
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFEBCE87)
-                imgui.TextUnformatted(labelFuel .. " to " .. string.format("%d ", toLoadHub.fuel_to_load) .. animate_dots())
+                imgui.TextUnformatted(labelFuel .. " to " .. string.format("%d ", toLoadHub.fuel_to_load) .. toloadHub_dotsFuel:animate())
                 imgui.PopStyleColor()
             end
             if seatBeltStatusOn() then
@@ -1243,9 +1257,22 @@ function viewToLoadHubWindow()
     -- Onboarding Phase
     if toLoadHub.phases.is_onboarding and not toLoadHub.phases.is_onboarding_pause and not toLoadHub.phases.is_onboarded then
         if toLoadHub.pax_count > 0 and not toLoadHub.phases.is_pax_onboarded and (not toLoadHub.settings.general.pax_delayed or toLoadHub.phases.is_pax_onboard_enabled) then
-            imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-            imgui.TextUnformatted(string.format("Boarding in progress %s / %s boarded", math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
-            imgui.PopStyleColor()
+            local temp_window_size = imgui.GetWindowSize()
+            if toLoadHub.settings.simulation.opdisplay == 1 and temp_window_size ~= nil then
+                imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
+                imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
+                imgui.ProgressBar(toLoadHub_NoPax / toLoadHub.pax_count, temp_window_size -16    , 20)
+                imgui.PopStyleColor()
+                imgui.PopStyleColor()
+            elseif toLoadHub.settings.simulation.opdisplay == 2 then
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                imgui.TextUnformatted(toloadHub_dotsPax:animate())
+                imgui.PopStyleColor()
+            else
+                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                imgui.TextUnformatted(string.format("Boarding in progress %s / %s boarded", math.floor(toLoadHub_NoPax), toLoadHub.pax_count))
+                imgui.PopStyleColor()
+            end
         elseif toLoadHub.pax_count > 0 and toLoadHub.phases.is_pax_onboarded then
             imgui.PushStyleColor(imgui.constant.Col.Text, 0xFFFFD700)
             imgui.TextUnformatted(string.format("Passenger boarded %s", toLoadHub_NoPax))
@@ -1257,15 +1284,27 @@ function viewToLoadHubWindow()
         end
         if toLoadHub.cargo > 0 and not toLoadHub.phases.is_cargo_onboarded then
             if toLoadHub.phases.is_cargo_started then
-                imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
-                imgui.TextUnformatted(string.format("Cargo in progress:"))
-                imgui.Spacing()
-                imgui.SameLine(50)
-                imgui.TextUnformatted(string.format("FWD %.2f %s / %.2f %s loaded", writeInUnitKg(toLoadHub_FwdCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_fwd) / 1000, toLoadHub.unitTLabel))
-                imgui.Spacing()
-                imgui.SameLine(50)
-                imgui.TextUnformatted(string.format("AFT %.2f %s / %.2f %s loaded", writeInUnitKg(toLoadHub_AftCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_aft) / 1000, toLoadHub.unitTLabel))
-                imgui.PopStyleColor()
+                if toLoadHub.settings.simulation.opdisplay == 1 then
+                    imgui.PushStyleColor(imgui.constant.Col.FrameBg, 0xFF272727) -- bacground
+                    imgui.PushStyleColor(imgui.constant.Col.PlotHistogram, 0xFF95FFF8) -- bar color
+                    imgui.ProgressBar((toLoadHub_FwdCargo + toLoadHub_AftCargo) / toLoadHub.cargo, temp_window_size -16    , 20)
+                    imgui.PopStyleColor()
+                    imgui.PopStyleColor()
+                elseif toLoadHub.settings.simulation.opdisplay == 2 then
+                    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                    imgui.TextUnformatted(toloadHub_dotsCargo:animate())
+                    imgui.PopStyleColor()
+                else
+                    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+                    imgui.TextUnformatted(string.format("Cargo in progress:"))
+                    imgui.Spacing()
+                    imgui.SameLine(50)
+                    imgui.TextUnformatted(string.format("FWD %.2f %s / %.2f %s loaded", writeInUnitKg(toLoadHub_FwdCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_fwd) / 1000, toLoadHub.unitTLabel))
+                    imgui.Spacing()
+                    imgui.SameLine(50)
+                    imgui.TextUnformatted(string.format("AFT %.2f %s / %.2f %s loaded", writeInUnitKg(toLoadHub_AftCargo) / 1000, toLoadHub.unitTLabel, writeInUnitKg(toLoadHub.cargo_aft) / 1000, toLoadHub.unitTLabel))
+                    imgui.PopStyleColor()
+                end
             else
                 imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF88C0D0)
                 imgui.TextUnformatted(string.format("Cargo loading has not started yet."))
