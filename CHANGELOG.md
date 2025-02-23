@@ -1,4 +1,11 @@
 # Changelog  
+# Changelog  
+## [1.3.0]- 2025-03-01
+### Added
+- Loading view showing a number, bar, or nothing
+- Estimated remaining time for loading
+- Setting menu reorganized
+
 ## [1.2.1]- 2025-02-22
 ### Added
 - Messages for refuelling command

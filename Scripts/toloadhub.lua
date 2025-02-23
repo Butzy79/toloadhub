@@ -16,7 +16,7 @@ local valid_plane_icao = { A319 = true, A20N = true, A321 = true, A21N = true, A
 -- == CONFIGURATION DEFAULT VARIABLES ==
 local toLoadHub = {
     title = "ToLoadHUB",
-    version = "1.2.1",
+    version = "1.3.0",
     file = "toLoadHub.ini" ,
     visible_main = false,
     visible_settings = false,
@@ -44,6 +44,7 @@ local toLoadHub = {
     cargo_starting_range = {45, 60},
     cargo_speeds = {0, 4, 10},
     kgPerUnit = 25,
+    time_operation = nil,
     first_init = false,
     is_lbs = false,
     unitLabel = "KGS",
@@ -163,6 +164,9 @@ local toLoadHub = {
             is_lbs = false,
             mute_init_failed_validation_sound = false,
         },
+        simulation = {
+            opdisplay = 0
+        },
         simbrief = {
             username = "",
             auto_fetch = true,
@@ -202,6 +206,47 @@ local loadsheetStructure = {
         setmetatable(obj, self)
         self.__index = self
         return obj
+    end
+}
+
+local ToloadHUBTimer = {
+    new = function(self)
+        local obj = {startTime = 0, elapsedTime = 0, isPaused = true, isRunning = false}
+        setmetatable(obj, self)
+        self.__index = self
+        return obj
+    end,
+    start = function(self)
+        if not self.isRunning then
+            self.startTime = os.time() - self.elapsedTime
+            self.isRunning = true
+            self.isPaused = false
+        end
+    end,
+    pause = function(self)
+        if self.isRunning then
+            self.elapsedTime = os.time() - self.startTime
+            self.isRunning = false
+            self.isPaused = true
+        end
+    end,
+    getTime = function(self)
+        if self.isRunning then
+            return os.time() - self.startTime
+        else
+            return self.elapsedTime
+        end
+    end,
+    getFormattedTime = function(self, estimatedSeconds)
+        local seconds = math.max(0, estimatedSeconds - self:getTime())
+        if seconds < 60 then return "Less than a minute" end
+        local minutes = math.floor(seconds / 60)
+        local remainder = seconds % 60
+        if remainder >= 40 then minutes = minutes + 1 end
+        return "~" .. minutes .. " min left"
+    end,
+    isInstanceOf = function(self, class)
+        return getmetatable(self) == class
     end
 }
 
@@ -372,6 +417,14 @@ local function readSettingsToFile()
             end
         end
     end
+end
+
+local function operationEstimationTimeLeft()
+    if toLoadHub.time_operation and toLoadHub.time_operation:isInstanceOf(ToloadHUBTimer) then
+        local speed = toLoadHub.settings.general.boarding_speed
+        return ToloadHUBTimer:getFormattedTime(speed == 0 and toLoadHub.simulate_fast_value or toLoadHub.simulate_real_value)
+    end
+    return ""
 end
 
 local function divideCargoFwdAft()
@@ -608,6 +661,7 @@ local function resetAirplaneParameters(initJetway)
     toLoadHub.chocks_on_set = false
     toLoadHub.chocks_out_set = false
     toLoadHub.chocks_in_set = false
+    toLoadHub.time_operation = nil
     toLoadHub.what_to_speak = nil
     toLoadHub.boarding_sound_played = false
     toLoadHub.deboarding_sound_played = false
@@ -853,6 +907,7 @@ local function startProcedure(is_boarding, door_setting, message)
     toLoadHub.next_cargo_check = os.time()
     toLoadHub.phases[is_boarding and "is_onboarding" or "is_deboarding"] = true
     toLoadHub.what_to_speak = message
+    toLoadHub.time_operation = ToloadHUBTimer:new():start()
 end
 
 local function focusOnToLoadHub()
@@ -1118,7 +1173,6 @@ function viewToLoadHubWindow()
         end
     end
 
-
     -- Starting Onboarding and Passenger/Cargo Selection
     if toLoadHub_onground_any > 0 and not toLoadHub.phases.is_onboarded and not toLoadHub.phases.is_onboarding then
         local passengeraNumberChanged, newPassengerNumber = imgui.SliderInt("Passengers number", toLoadHub.pax_count, 0, toLoadHub.max_passenger, "Value: %d")
@@ -1226,6 +1280,9 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("No extra cargo to load"))
             imgui.PopStyleColor()
         end
+        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+        imgui.TextUnformatted(string.format(operationEstimationTimeLeft()))
+        imgui.PopStyleColor()
 
         if imgui.Button("Pause Boarding") then
             toLoadHub.phases.is_onboarding_pause = true
@@ -1333,6 +1390,9 @@ function viewToLoadHubWindow()
             imgui.TextUnformatted(string.format("No cargo to offload"))
             imgui.PopStyleColor()
         end
+        imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+        imgui.TextUnformatted(string.format(operationEstimationTimeLeft()))
+        imgui.PopStyleColor()
         if imgui.Button("Pause Deboarding") then
             toLoadHub.phases.is_deboarding_pause = true
         end
@@ -1506,25 +1566,6 @@ function viewToLoadHubWindowSettings()
     changed, newval = imgui.Checkbox("Automatically initialize airplane", toLoadHub.settings.general.auto_init)
     if changed then toLoadHub.settings.general.auto_init , setSave = newval, true end
 
-    changed, newval = imgui.Checkbox("Simulate Fuel", toLoadHub.settings.general.simulate_fuel)
-    if changed then toLoadHub.settings.general.simulate_fuel , setSave = newval, true end
-    
-    if toLoadHub.settings.general.simulate_fuel then
-        changed, newval = imgui.Checkbox("When initializing, reset the fuel to an empty tank", toLoadHub.settings.general.simulate_init_fuel)
-        if changed then toLoadHub.settings.general.simulate_init_fuel , setSave = newval, true end
-    end
-
-    changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
-    if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
-
-    if not toLoadHub.settings.general.pax_delayed then
-        changed, newval = imgui.Checkbox("Load cargo with pax boarding", toLoadHub.settings.general.concourrent_cargo)
-        if changed then toLoadHub.settings.general.concourrent_cargo , setSave = newval, true end
-    end
-
-    changed, newval = imgui.Checkbox("Starting with loading cargo", toLoadHub.settings.general.pax_delayed)
-    if changed then toLoadHub.settings.general.pax_delayed , setSave = newval, true end
-
     changed, newval = imgui.Checkbox("Use Imperial Units", toLoadHub.settings.general.is_lbs)
     if changed then toLoadHub.settings.general.is_lbs , setSave = newval, true end
     if toLoadHub.simbrief.units == nil then
@@ -1552,6 +1593,49 @@ function viewToLoadHubWindowSettings()
 
     changed, newval = imgui.Checkbox("Debug Mode", toLoadHub.settings.general.debug)
     if changed then toLoadHub.settings.general.debug , setSave = newval, true end
+    imgui.Separator()
+    imgui.Spacing()
+
+    -- Simulation Settings
+    imgui.PushStyleColor(imgui.constant.Col.Text, 0xFF95FFF8)
+    imgui.TextUnformatted("Simulation Settings:")
+    imgui.PopStyleColor()
+
+    imgui.TextUnformatted("Choose operations info display:")
+    if imgui.RadioButton("Numbers##opdisplay", toLoadHub.settings.simulation.opdisplay == 0) then
+        toLoadHub.settings.simulation.opdisplay = 0
+        setSave = true
+    end
+    imgui.SameLine(85)
+    if imgui.RadioButton("Progress bar##opdisplay", toLoadHub.settings.simulation.opdisplay == 1) then
+        toLoadHub.settings.simulation.opdisplay = 1
+        setSave = true
+    end
+    imgui.SameLine(230)
+    if imgui.RadioButton("Status text##opdisplay", toLoadHub.settings.simulation.opdisplay == 3) then
+        toLoadHub.settings.simulation.opdisplay = 3
+        setSave = true
+    end
+
+    changed, newval = imgui.Checkbox("Simulate Fuel", toLoadHub.settings.general.simulate_fuel)
+    if changed then toLoadHub.settings.general.simulate_fuel , setSave = newval, true end
+
+    if toLoadHub.settings.general.simulate_fuel then
+        changed, newval = imgui.Checkbox("When initializing, reset the fuel to an empty tank", toLoadHub.settings.general.simulate_init_fuel)
+        if changed then toLoadHub.settings.general.simulate_init_fuel , setSave = newval, true end
+    end
+
+    changed, newval = imgui.Checkbox("Simulate Cargo", toLoadHub.settings.general.simulate_cargo)
+    if changed then toLoadHub.settings.general.simulate_cargo , setSave = newval, true end
+
+    if not toLoadHub.settings.general.pax_delayed then
+        changed, newval = imgui.Checkbox("Load cargo with pax boarding", toLoadHub.settings.general.concourrent_cargo)
+        if changed then toLoadHub.settings.general.concourrent_cargo , setSave = newval, true end
+    end
+
+    changed, newval = imgui.Checkbox("Starting with loading cargo", toLoadHub.settings.general.pax_delayed)
+    if changed then toLoadHub.settings.general.pax_delayed , setSave = newval, true end
+
     imgui.Separator()
     imgui.Spacing()
 

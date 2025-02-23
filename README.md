@@ -23,17 +23,20 @@ ToLoadHUB provides a customizable configuration through the `toloadhub.ini` file
 ### General Settings  
 - **Auto Open ToLoad Hub Window**: Automatically opens the ToLoad Hub window upon simulator launch if the aircraft is compatible.  
 - **Automatically Initialize Airplane**: Automatically sets the aircraft values to zero on simulator startup.
+- **Use Imperial Units**: Set Imperial units. SimBrief has priority over this value. If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.
+- **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
+- **Mute the 'Invalid Airplane' message for ToloadHUB**: Mute the initial message if the airplane ICAO is not compatibile with ToLoadHUB
+- **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.
+- **Auto Jetway Management**: If enabled, the jetway is automatically attached and detached from the airplane.
+
+### Simulation Settings
+- **Choose operations info display**: Display numbers, progress bar, or simple status text for boarding and deboarding operations.
 - **Simulate Fuel**: If enabled, the plugin manages the fuel.
 - **When initializing, reset the fuel to an empty tank**: If enabled, fuel is set to zero during the reset phase.
 - **Simulate Cargo**: If enabled, cargo loading/unloading is simulated; otherwise, it is loaded instantly.
 - **Load cargo with pax boarding**: If selected, cargo loading will start simultaneously with passenger boarding.
 Not visibile if Starting with loading cargo is checked.
 - **Starting with loading cargo**: When selected, cargo loading will begin, and passengers will require a manual action via a button to start boarding. The button will be visible during the loading process.
-- **Use Imperial Units**: Set Imperial units. SimBrief has priority over this value. If SimBrief plan is set to KGS, the units are metric. If SimBrief is set to POUNDS, the units are imperial.
-- **Auto Start and Stop JD Ground Hanling**: If JD Ground Handling is installed, you can autostart it.
-- **Mute the 'Invalid Airplane' message for ToloadHUB**: Mute the initial message if the airplane ICAO is not compatibile with ToLoadHUB
-- **Debug Mode**: Enables or disables verbose debugging. Use only for troubleshooting.
-- **Auto Jetway Management**: If enabled, the jetway is automatically attached and detached from the airplane.
 
 ### SimBrief Settings  
 - **Username**: Your SimBrief username.
