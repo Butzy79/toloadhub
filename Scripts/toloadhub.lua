@@ -1021,7 +1021,7 @@ local function sendLoadsheetToToliss(data)
             "ARRIVAL TIMES @-@ " .. os.date((toLoadHub.settings.hoppie.utc_time and "!" or "") .. "%H:%M"),
             formatRowLoadSheet("Landing", toLoadHub.chocks_on_time, 22),
             formatRowLoadSheet("Chock in", toLoadHub.chocks_in_time, 22),
-            "Fuel Info: " .. lblSaving,
+            "Fuel: " .. lblSaving,
         }, "\n")
     end
 
